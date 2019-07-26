@@ -3,10 +3,16 @@
 #+OPTIONS: toc:nil
 Collection of useful python scripts for the CARLA simulator.
 * TODOs
+** to synchronize all sensors and to furthermore be able to simulate at any wanted framerates guide the implementation according to 'examples/synchronous_mode.py'
+*** TODO bring 'sensors_at_vehicle_sync.py' to run
+*** it does run locally on server but not from remote
 ** TODO add stereo camera support, i.e. add additional camera sensor right of current one
+*** so far it seems that stereo frames can only be synchronized by timestamps
+**** TODO test how well the timestamps can be used for synchronization
 ** TODO add depth camera support placed at same position as left RGB camera
 ** TODO add semantic segmantation camera support placed at same position as left RGB camera
 ** TODO record test sequences and test on ORB-SLAM2 (additionally on libVISO2 or my own implementation)
 ** TODO extend implementation: let an arbitrary number of vehicles spawn at random places, all attached with sensors and driving around on random routes. After some (ranmdom?) time despawn vehicles individually.
 *** very fast way of recording lots of sequences
 *** only useful if recordings of dynamic scenes (i.e. with moving objects in) are wanted
+** TODO play around with simulation time by setting '-benchmark' and '-fps' at the server
