@@ -33,7 +33,7 @@ def process_rgb_camera_left(data):
     # DEBUG print information about captured data
     print("RGB Camera captured frame #{0}: Timestamp: {1}, Pose: {2}".format(rgb_sensor_left_framecount, data.timestamp, data.transform))
     # save captured image to disk
-    path = "out/im_" + str(rgb_sensor_left_framecount).zfill(10) + ".png"
+    path = "raw/stereo/left/images/" + str(rgb_sensor_left_framecount).zfill(10) + ".png"
     rgb_sensor_left_framecount += 1
     data.save_to_disk(path, color_converter=carla.ColorConverter.Raw)
     # TODO append pose to file
@@ -85,7 +85,7 @@ def main():
     car_bb = car_actor.bounding_box
     cam_rel_transform = carla.Transform(carla.Location(x=car_bb.extent.x, y=car_bb.extent.y, z=car_bb.extent.z*2.0+0.5))
     # spawn sensor
-    rgb_sensor_left = spawn_camera_sensor('sensor.camera.rgb', world, 1920, 1080, 110.0, 20.0, car_actor, cam_rel_transform)
+    rgb_sensor_left = spawn_camera_sensor('sensor.camera.rgb', world, 640, 480, 110.0, 20.0, car_actor, cam_rel_transform)
     # set sensor listener
     rgb_sensor_left.listen(lambda data: process_rgb_camera_left(data))
 
