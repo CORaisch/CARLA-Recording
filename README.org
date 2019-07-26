@@ -1,0 +1,12 @@
+#+TITLE: README
+#+OPTIONS: tex:t
+#+OPTIONS: toc:nil
+Collection of useful python scripts for the CARLA simulator.
+* TODOs
+** TODO add stereo camera support, i.e. add additional camera sensor right of current one
+** TODO add depth camera support placed at same position as left RGB camera
+** TODO add semantic segmantation camera support placed at same position as left RGB camera
+** TODO record test sequences and test on ORB-SLAM2 (additionally on libVISO2 or my own implementation)
+** TODO extend implementation: let an arbitrary number of vehicles spawn at random places, all attached with sensors and driving around on random routes. After some (ranmdom?) time despawn vehicles individually.
+*** very fast way of recording lots of sequences
+*** only useful if recordings of dynamic scenes (i.e. with moving objects in) are wanted
