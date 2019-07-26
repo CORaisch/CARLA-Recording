@@ -1,54 +1,68 @@
 import carla
 import random
 import math
-import pygame
+
+## globals
+rgb_sensor_left_framecount = 0
 
 def get_fov_from_fx(image_widht, fx):
     return (2.0 * math.atan(image_widht/(2.0*fx))) * 180.0 / math.pi
 
-def process_rgb_camera(data):
-    # print some information about captured data
-    print("RGB Camera captured frame #{0}: Timestamp: {1}, Pose: {2}".format(data.frame, data.timestamp, data.transform))
-    # save image to disk
-    path = "out/im_" + str(data.timestamp) + ".png"
-    data.save_to_disk(path, color_converter=carla.ColorConverter.Raw)
+def spawn_camera_sensor(camera_type, world, im_width, im_height, fov, fps, actor_to_attach_at, rel_transform):
+    # set camera sensor type
+    rgb_blueprint = world.get_blueprint_library().find(str(camera_type))
+    # set image size
+    rgb_blueprint.set_attribute('image_size_x', str(im_width))
+    rgb_blueprint.set_attribute('image_size_y', str(im_height))
+    # set field of view (in deg)
+    rgb_blueprint.set_attribute('fov', str(fov))
+    # set frame capturing rate
+    sensor_tick = 1.0 / fps
+    rgb_blueprint.set_attribute('sensor_tick', str(sensor_tick))
+    # set special attributes for rgb cameras
+    if camera_type == 'sensor.camera.rgb':
+        # TODO find out good value for motion blur intensity
+        rgb_blueprint.set_attribute('motion_blur_intensity', '0.25') # 0 == off | 1 == max | 0.45 == default
+        # NOTE further attributes for rgb: motion_blur_max_distortion, motion_blur_min_object_screen_size, gamma, enable_postprocess_effects
+    # spawn sensor and attach it to actor
+    return world.spawn_actor(rgb_blueprint, rel_transform, attach_to=actor_to_attach_at)
 
+# TODO investigate: sometimes when quitting out manually the last recorded images are not fully stored
+def process_rgb_camera_left(data):
+    global rgb_sensor_left_framecount
+    # DEBUG print information about captured data
+    print("RGB Camera captured frame #{0}: Timestamp: {1}, Pose: {2}".format(rgb_sensor_left_framecount, data.timestamp, data.transform))
+    # save captured image to disk
+    path = "out/im_" + str(rgb_sensor_left_framecount).zfill(10) + ".png"
+    rgb_sensor_left_framecount += 1
+    data.save_to_disk(path, color_converter=carla.ColorConverter.Raw)
+    # TODO append pose to file
+    # TODO append timestamp to file
+
+# the only reason for the main loop so far is that if the user breaks the loop via terminal then the vehicle should stop recording and despawn
 def main_loop(world):
-    try:
-        # loop endlessly and update specator data
-        clock = pygame.time.Clock()
-        while True:
-            # limit iterations to 60 Hz
-            clock.tick_busy_loop(60)
-            # get snapshot of current world state
-            world_snap = world.get_snapshot()
-            # get snapshot of spectator actor
-            spec_snap = world_snap.find(world.get_spectator().id)
-            # get current pose of spectator
-            spec_T = spec_snap.get_transform()
-            # print spectator pose
-            # print("location: {0} | rotation: {1}".format(spec_T.location, spec_T.rotation))
-    finally:
-        # NOTE if main loop related stuff needs to be removed afterwards, then do this here
+    # loop endlessly till user terminates manually
+    while True:
         pass
 
 def main():
-    # connect to server at 134.2.178.201 (ZDV net) at port 2000
+    ## connect to server at 134.2.178.201 (ZDV net) at port 2000
     client = carla.Client('134.2.178.201', 2000)
     client.set_timeout(10.0) # set 10 sec network timeout
 
-    # retrieve world from server
+    ## retrieve world from server
     world = client.get_world()
 
-    # adjust traffic light timings (too long red times at default^^)
+    ## adjust traffic light timings
+    # reduce red light timings
     for traffic_light in world.get_actors().filter('traffic.traffic_light'):
-        traffic_light.set_red_time(2.0)
+        # print("red time: {0}, yellow time: {1}, green time: {2}".format(traffic_light.get_red_time(), traffic_light.get_yellow_time(), traffic_light.get_green_time()))
+        traffic_light.set_red_time(1.0)
+        traffic_light.set_yellow_time(0.5)
+        traffic_light.set_green_time(2.0)
 
-    # retrieve spectator actor from world
-    spec    = world.get_spectator()
-    spec_id = spec.id
 
-    ## spawn vehicle to which the camera should be attached
+    ## spawn vehicle to which the sensors should be attached
     # pick random spawn point from all possible spawn locations
     spawn_points = world.get_map().get_spawn_points()
     random.shuffle(spawn_points)
@@ -64,27 +78,24 @@ def main():
         car_id    = response[0].actor_id
         car_actor = world.get_actor(car_id)
     else:
-        raise RuntimeError("failed spawning vehicle")
+        raise RuntimeError("failed spawning sensor carrying vehicle")
 
-
-    # setup rgb camera sensor
-    rgb_blueprint = world.get_blueprint_library().find('sensor.camera.rgb')
-    rgb_blueprint.set_attribute('image_size_x', '1920')
-    rgb_blueprint.set_attribute('image_size_y', '1080')
-    rgb_blueprint.set_attribute('fov', '110') # 110 deg field of view
-    rgb_blueprint.set_attribute('sensor_tick', '0.2') # capture 20 frame per second
+    ## setup left rgb camera sensor
+    # set location relative to vehicle where the sensor should be attached
     car_bb = car_actor.bounding_box
-    cam_rel_transform = carla.Transform(carla.Location(x=car_bb.extent.x, y=car_bb.extent.y, z=car_bb.extent.z*2.0+0.5)) # transform of camera relative to attached actor
-    rgb_sensor = world.spawn_actor(rgb_blueprint, cam_rel_transform, attach_to=car_actor) # attach rgb camera to spectator
-    rgb_sensor.listen(lambda data: process_rgb_camera(data))
+    cam_rel_transform = carla.Transform(carla.Location(x=car_bb.extent.x, y=car_bb.extent.y, z=car_bb.extent.z*2.0+0.5))
+    # spawn sensor
+    rgb_sensor_left = spawn_camera_sensor('sensor.camera.rgb', world, 1920, 1080, 110.0, 20.0, car_actor, cam_rel_transform)
+    # set sensor listener
+    rgb_sensor_left.listen(lambda data: process_rgb_camera_left(data))
 
     try:
         main_loop(world)
     except KeyboardInterrupt:
         print('\nCancelled by user. Bye!')
-    finally:
+    finally: # on exit: destroy sensors and despawn vehicle
         # remove sensor
-        rgb_sensor.destroy()
+        rgb_sensor_left.destroy()
         # remove vehicle
         client.apply_batch([carla.command.DestroyActor(car_actor)])
 
