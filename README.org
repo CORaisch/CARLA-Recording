@@ -4,7 +4,12 @@
 Collection of useful python scripts for the CARLA simulator.
 * TODOs
 ** to synchronize all sensors and to furthermore be able to simulate at any wanted framerates guide the implementation according to 'examples/synchronous_mode.py'
-*** TODO bring 'sensors_at_vehicle_sync.py' to run
+*** TODO bring 'sensors_at_vehicle_sync.py' to run remotely
+**** TODO try: move code for spawning actors into 'CarlaSyncMode' context, i.e. after lines 'with CarlaSyncMode(...'
+***** maybe the asynchronizity is comming from the fact that the sensors are spawned not within synchronous mode and therefore start capturing at different times
+**** TODO try: test old implementation of 'synchronous_mode.py' (version 0.9.5)
+***** if it will run remotely aswell as locally than try upwards through git commits till the version that does not run anymore and figure out the buggy line
+***** if it will not run remotely then the problem maybe relates closer to the subsystem and should no longer be investigated -> maybe then ask in forum ?
 *** it does run locally on server but not from remote
 ** TODO add stereo camera support, i.e. add additional camera sensor right of current one
 *** so far it seems that stereo frames can only be synchronized by timestamps
