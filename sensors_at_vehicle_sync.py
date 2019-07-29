@@ -64,18 +64,16 @@ class CarlaSyncMode(object):
 
     def _retrieve_data(self, sensor_queue, timeout):
         while True:
-            print("size of queue: ", sensor_queue.qsize())
             data = sensor_queue.get(timeout=timeout)
-            if type(data) == carla.Image:
-                print("store image:")
-            ### beg DEBUG for rgb image the framecount from the server is older then the local framecount
-            print(type(data))
-            print('self.frame:',self.frame)
-            print('data.frame:',data.frame)
-            ### end DEBUG
             if data.frame == self.frame:
                 return data
 
+def raw_to_np_array(raw):
+    arr = np.frombuffer(raw.raw_data, dtype=np.dtype("uint8"))
+    arr = np.reshape(arr, (raw.height, raw.width, 4))
+    arr = arr[:, :, :3]
+    arr = arr[:, :, ::-1]
+    return arr
 
 def draw_image(surface, image, blend=False):
     array = np.frombuffer(image.raw_data, dtype=np.dtype("uint8"))
@@ -87,6 +85,15 @@ def draw_image(surface, image, blend=False):
         image_surface.set_alpha(100)
     surface.blit(image_surface, (0, 0))
 
+def display_sensors(surface, rgb_l, rgb_r, depht, semseg):
+    arr = np.zeros((2*rgb_l.height, 2*rgb_l.width, 3)) # NOTE assuming that all sensors have same size
+    arr[:rgb_l.height, :rgb_l.width, :] = raw_to_np_array(rgb_l)
+    arr[:rgb_l.height, rgb_l.width:, :] = raw_to_np_array(rgb_r)
+    arr[rgb_l.height:, :rgb_l.width, :] = raw_to_np_array(depht)
+    arr[rgb_l.height:, rgb_l.width:, :] = raw_to_np_array(semseg)
+    # render to display
+    image_surface = pygame.surfarray.make_surface(arr.swapaxes(0, 1))
+    surface.blit(image_surface, (0, 0))
 
 def get_font():
     fonts = [x for x in pygame.font.get_fonts()]
@@ -110,8 +117,10 @@ def main():
     actor_list = []
     pygame.init()
 
+    sensor_height = 600; sensor_width = 800;
+
     display = pygame.display.set_mode(
-        (800, 600),
+        (sensor_width * 2, sensor_height * 2),
         pygame.HWSURFACE | pygame.DOUBLEBUF)
     font = get_font()
     clock = pygame.time.Clock()
@@ -136,44 +145,77 @@ def main():
         vehicle.set_simulate_physics(True)
         vehicle.set_autopilot(True)
 
-        # TODO write function to spawn camera like sensors (see sensors_at_vehicle.py)
-        # TODO modify attributes of blueprint
-        camera_rgb = world.spawn_actor(
-            blueprint_library.find('sensor.camera.rgb'),
-            carla.Transform(carla.Location(x=-5.5, z=2.8), carla.Rotation(pitch=-15)),
-            attach_to=vehicle)
-        actor_list.append(camera_rgb)
+        ## spawn sensors
+        # define left and right camera poses relative to vehicle
+        baseline = 0.5 # baseline in m ? (TODO verify CARLA distance units)
+        vehicle_bb = vehicle.bounding_box
+        cam_rel_transform_l = carla.Transform(carla.Location(x=vehicle_bb.extent.x, y=vehicle_bb.extent.y-baseline/2.0, z=vehicle_bb.extent.z*2.0+0.5))
+        cam_rel_transform_r = carla.Transform(carla.Location(x=vehicle_bb.extent.x, y=vehicle_bb.extent.y+baseline/2.0, z=vehicle_bb.extent.z*2.0+0.5))
 
-        # TODO modify attributes of blueprint
+        # TODO write function to spawn camera like sensors (see sensors_at_vehicle.py)
+        # TODO modify attributes of sensor blueprints
+
+        # spaw left stereo rgb camera
+        camera_rgb_left = world.spawn_actor(
+            blueprint_library.find('sensor.camera.rgb'),
+            cam_rel_transform_l,
+            attach_to=vehicle)
+        actor_list.append(camera_rgb_left)
+
+        # spaw right stereo rgb camera
+        camera_rgb_right = world.spawn_actor(
+            blueprint_library.find('sensor.camera.rgb'),
+            cam_rel_transform_r,
+            attach_to=vehicle)
+        actor_list.append(camera_rgb_right)
+
+        # spawn depth camera at left camera pose
+        camera_depth = world.spawn_actor(
+            blueprint_library.find('sensor.camera.depth'),
+            cam_rel_transform_l,
+            attach_to=vehicle)
+        actor_list.append(camera_depth)
+
+        # spawn semantic segmentation camera at left camera pose
         camera_semseg = world.spawn_actor(
             blueprint_library.find('sensor.camera.semantic_segmentation'),
-            carla.Transform(carla.Location(x=-5.5, z=2.8), carla.Rotation(pitch=-15)),
+            cam_rel_transform_l,
             attach_to=vehicle)
         actor_list.append(camera_semseg)
 
         # Create a synchronous mode context.
-        with CarlaSyncMode(world, camera_rgb, camera_semseg, fps=30) as sync_mode:
+        with CarlaSyncMode(world, camera_rgb_left, camera_rgb_right, camera_depth, camera_semseg, fps=10) as sync_mode:
             while True:
                 if should_quit():
                     return
                 clock.tick()
 
-                # Advance the simulation and wait for the data.
-                snapshot, image_rgb, image_semseg = sync_mode.tick(timeout=2.0)
+                ## advance the simulation and wait for the data
+                snapshot, im_rgb_l, im_rgb_r, im_depth, im_semseg = sync_mode.tick(timeout=2.0)
 
-                image_semseg.convert(carla.ColorConverter.CityScapesPalette)
+                # TODO store measurements in buffer
+
+                # TODO write measurements from buffer to disk multithreaded
+
+                ## convert sensor representations for visualization
+                # use logarithmic depth scaling for depth map
+                im_depth.convert(carla.ColorConverter.LogarithmicDepth)
+                # use CityScapes palette for semantic segmentation
+                im_semseg.convert(carla.ColorConverter.CityScapesPalette)
+
+                ## compute simulated fps (for verification)
                 fps = round(1.0 / snapshot.timestamp.delta_seconds)
 
-                # TODO store images in buffer
+                # draw images seperatley
+                display_sensors(display, im_rgb_l, im_rgb_r, im_depth, im_semseg)
 
-                # TODO write images from buffer to disk multithreaded
+                # draw left rgb and semantic segmentation overlayed
+                # draw_image(display, im_rgb_l)
+                # draw_image(display, im_semseg, blend=True)
 
-                # TODO draw images seperatley
-                # Draw the display.
-                draw_image(display, image_rgb)
-                draw_image(display, image_semseg, blend=True)
+                # draw simulation timings
                 display.blit(font.render('% 5d FPS (real)' % clock.get_fps(), True, (255, 255, 255)), (8, 10))
-                display.blit(font.render('% 5d FPS (simulated)' % fps, True, (255, 255, 255)), (8, 28))
+                display.blit(font.render('% 5d FPS (simulated sensor capturing rate)' % fps, True, (255, 255, 255)), (8, 28))
                 pygame.display.flip()
 
     finally:
