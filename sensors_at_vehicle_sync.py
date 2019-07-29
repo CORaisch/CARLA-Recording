@@ -76,10 +76,7 @@ def raw_to_np_array(raw):
     return arr
 
 def draw_image(surface, image, blend=False):
-    array = np.frombuffer(image.raw_data, dtype=np.dtype("uint8"))
-    array = np.reshape(array, (image.height, image.width, 4))
-    array = array[:, :, :3]
-    array = array[:, :, ::-1]
+    array = raw_to_np_array(image)
     image_surface = pygame.surfarray.make_surface(array.swapaxes(0, 1))
     if blend:
         image_surface.set_alpha(100)
@@ -209,7 +206,7 @@ def main():
                 # draw images seperatley
                 display_sensors(display, im_rgb_l, im_rgb_r, im_depth, im_semseg)
 
-                # draw left rgb and semantic segmentation overlayed
+                # draw left rgb and semantic segmentation overlayed (to verify if left frames are synchronized)
                 # draw_image(display, im_rgb_l)
                 # draw_image(display, im_semseg, blend=True)
 
