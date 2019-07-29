@@ -68,6 +68,15 @@ class CarlaSyncMode(object):
             if data.frame == self.frame:
                 return data
 
+def should_quit():
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            return True
+        elif event.type == pygame.KEYUP:
+            if event.key == pygame.K_ESCAPE:
+                return True
+    return False
+
 def raw_to_np_array(raw):
     arr = np.frombuffer(raw.raw_data, dtype=np.dtype("uint8"))
     arr = np.reshape(arr, (raw.height, raw.width, 4))
@@ -82,11 +91,11 @@ def draw_image(surface, image, blend=False):
         image_surface.set_alpha(100)
     surface.blit(image_surface, (0, 0))
 
-def display_sensors(surface, rgb_l, rgb_r, depht, semseg):
+def display_sensors(surface, rgb_l, rgb_r, depth, semseg):
     arr = np.zeros((2*rgb_l.height, 2*rgb_l.width, 3)) # NOTE assuming that all sensors have same size
     arr[:rgb_l.height, :rgb_l.width, :] = raw_to_np_array(rgb_l)
     arr[:rgb_l.height, rgb_l.width:, :] = raw_to_np_array(rgb_r)
-    arr[rgb_l.height:, :rgb_l.width, :] = raw_to_np_array(depht)
+    arr[rgb_l.height:, :rgb_l.width, :] = raw_to_np_array(depth)
     arr[rgb_l.height:, rgb_l.width:, :] = raw_to_np_array(semseg)
     # render to display
     image_surface = pygame.surfarray.make_surface(arr.swapaxes(0, 1))
@@ -99,16 +108,28 @@ def get_font():
     font = pygame.font.match_font(font)
     return pygame.font.Font(font, 14)
 
-
-def should_quit():
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            return True
-        elif event.type == pygame.KEYUP:
-            if event.key == pygame.K_ESCAPE:
-                return True
-    return False
-
+def spawn_camera_sensor(camera_type, world, widht, height, fov, fps, parent_actor, rel_transform):
+    # set camera sensor type
+    rgb_blueprint = world.get_blueprint_library().find(str(camera_type))
+    # set image size
+    rgb_blueprint.set_attribute('image_size_x', str(widht))
+    rgb_blueprint.set_attribute('image_size_y', str(height))
+    # set field of view (in deg)
+    rgb_blueprint.set_attribute('fov', str(fov))
+    # set frame capturing rate
+    sensor_tick = ( (1.0 / fps) if fps != 0.0 else 0.0 ) # sensor_tick == 0 means caputre all frames if possible (always possible in sync mode)
+    rgb_blueprint.set_attribute('sensor_tick', str(sensor_tick))
+    # set special attributes for rgb cameras
+    if camera_type == 'sensor.camera.rgb':
+        # set motion blur parameters
+        # TODO find out good value for motion blur intensity
+        rgb_blueprint.set_attribute('motion_blur_intensity', '0.25') # 0 == off | 1 == max | 0.45 == default
+        rgb_blueprint.set_attribute('motion_blur_max_distortion', '0.35') # in percentage of screen width | 0 == off
+        rgb_blueprint.set_attribute('motion_blur_min_object_screen_size', '0.1') # percentage of screen widht objects must have for motion blur
+        # set target gamma value of camera
+        rgb_blueprint.set_attribute('gamma', '2.2')
+    # spawn sensor and attach it to actor
+    return world.spawn_actor(rgb_blueprint, rel_transform, attach_to=parent_actor)
 
 def main():
     actor_list = []
@@ -130,12 +151,23 @@ def main():
     settings_w = world.get_settings()
 
     try:
+        # set random spawning location of sensor carrying vehicle
         m = world.get_map()
         start_pose = random.choice(m.get_spawn_points())
         waypoint = m.get_waypoint(start_pose.location)
 
+        ## setup world properties
+        # set traffic light timings
+        for traffic_light in world.get_actors().filter('traffic.traffic_light'):
+            traffic_light.set_red_time(1.0)
+            traffic_light.set_yellow_time(0.5)
+            traffic_light.set_green_time(2.0)
+        # TODO set random weather state of world
+
+        # get list of actor blueprints
         blueprint_library = world.get_blueprint_library()
 
+        # spawn vehicle to which sensors should be attached
         car_blueprints = [x for x in world.get_blueprint_library().filter('vehicle.*') if int(x.get_attribute('number_of_wheels')) == 4]
         vehicle = world.spawn_actor(random.choice(car_blueprints), start_pose)
         actor_list.append(vehicle)
@@ -149,35 +181,17 @@ def main():
         cam_rel_transform_l = carla.Transform(carla.Location(x=vehicle_bb.extent.x, y=vehicle_bb.extent.y-baseline/2.0, z=vehicle_bb.extent.z*2.0+0.5))
         cam_rel_transform_r = carla.Transform(carla.Location(x=vehicle_bb.extent.x, y=vehicle_bb.extent.y+baseline/2.0, z=vehicle_bb.extent.z*2.0+0.5))
 
-        # TODO write function to spawn camera like sensors (see sensors_at_vehicle.py)
-        # TODO modify attributes of sensor blueprints
-
-        # spaw left stereo rgb camera
-        camera_rgb_left = world.spawn_actor(
-            blueprint_library.find('sensor.camera.rgb'),
-            cam_rel_transform_l,
-            attach_to=vehicle)
+        # spawn left stereo rgb camera
+        camera_rgb_left = spawn_camera_sensor('sensor.camera.rgb', world, sensor_width, sensor_height, 90.0, 0.0, vehicle, cam_rel_transform_l)
         actor_list.append(camera_rgb_left)
-
-        # spaw right stereo rgb camera
-        camera_rgb_right = world.spawn_actor(
-            blueprint_library.find('sensor.camera.rgb'),
-            cam_rel_transform_r,
-            attach_to=vehicle)
+        # spawn right stereo rgb camera
+        camera_rgb_right = spawn_camera_sensor('sensor.camera.rgb', world, sensor_width, sensor_height, 90.0, 0.0, vehicle, cam_rel_transform_r)
         actor_list.append(camera_rgb_right)
-
         # spawn depth camera at left camera pose
-        camera_depth = world.spawn_actor(
-            blueprint_library.find('sensor.camera.depth'),
-            cam_rel_transform_l,
-            attach_to=vehicle)
+        camera_depth = spawn_camera_sensor('sensor.camera.depth', world, sensor_width, sensor_height, 90.0, 0.0, vehicle, cam_rel_transform_l)
         actor_list.append(camera_depth)
-
         # spawn semantic segmentation camera at left camera pose
-        camera_semseg = world.spawn_actor(
-            blueprint_library.find('sensor.camera.semantic_segmentation'),
-            cam_rel_transform_l,
-            attach_to=vehicle)
+        camera_semseg = spawn_camera_sensor('sensor.camera.semantic_segmentation', world, sensor_width, sensor_height, 90.0, 0.0, vehicle, cam_rel_transform_l)
         actor_list.append(camera_semseg)
 
         # Create a synchronous mode context.
