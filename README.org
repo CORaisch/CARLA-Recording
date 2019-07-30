@@ -23,6 +23,7 @@ Collection of useful python scripts for the CARLA simulator.
 *** .. which sensors should be used
 *** .. sensor parameters
 *** .. if world should be static or dynamic
+*** .. where the data should be saved
 *** .. weather presets
 *** use python argparse: https://docs.python.org/3/library/argparse.html
 ** TODO save sensor measurements and GT poses to disk
