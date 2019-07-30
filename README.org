@@ -26,9 +26,12 @@ Collection of useful python scripts for the CARLA simulator.
 *** .. where the data should be saved
 *** .. weather presets
 *** use python argparse: https://docs.python.org/3/library/argparse.html
-** TODO save sensor measurements and GT poses to disk
+** DONE save sensor measurements to disk 
+   CLOSED: [2019-07-30 Tue 21:35]
 *** use same data structure as KITTI
+** TODO save GT poses to disk
 *** maybe transform GT coord system to KITTI as well ?
-*** write data to buffer first and save to disk in simultanous thread (else runtime of simulation will be heavily affected)
+** TODO write sensor measurements to buffer first and save to disk in simultanous thread (else runtime of simulation will be heavily affected)
 ** TODO visualize the GT poses with evo-kitti tool to check if the representation is sufficient
 ** TODO record test sequences and test on ORB-SLAM2 (additionally on libVISO2 or my own implementation)
+*** write config file for ORB-SLAM2

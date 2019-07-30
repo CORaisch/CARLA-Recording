@@ -15,7 +15,6 @@ import numpy as np
 import carla
 import queue
 
-
 # NOTE taken from PythonAPI/examples/synchronous_mode.py
 class CarlaSyncMode(object):
     """
@@ -28,7 +27,7 @@ class CarlaSyncMode(object):
 
     """
 
-    def __init__(self, world, *sensors, **kwargs):
+    def __init__(self, world, sensors, **kwargs):
         self.world = world
         self.sensors = sensors
         self.frame = None
@@ -43,21 +42,29 @@ class CarlaSyncMode(object):
             synchronous_mode=True,
             fixed_delta_seconds=self.delta_seconds))
 
-        def make_queue(register_event):
+        def make_queue_snapshot(register_event):
             q = queue.Queue()
             register_event(q.put)
-            self._queues.append(q)
+            self._queues.append((q, 'carla.WorldSnapshot'))
 
-        make_queue(self.world.on_tick)
+        def make_queue_sensor(sensor, register_event):
+            q = queue.Queue()
+            register_event(q.put)
+            # self._queues.append((q, sensor.type_id))
+            self._queues.append((q, sensor[1]))
+
+        make_queue_snapshot(self.world.on_tick)
         for sensor in self.sensors:
-            make_queue(sensor.listen)
+            # make_queue_sensor(sensor, sensor.listen)
+            make_queue_sensor(sensor, sensor[0].listen)
         return self
 
     def tick(self, timeout):
         self.frame = self.world.tick()
-        data = [self._retrieve_data(q, timeout) for q in self._queues]
-        assert all(x.frame == self.frame for x in data)
-        return data
+        # q[0] == queue, q[1] == sensor_id
+        data = [(self._retrieve_data(q[0], timeout), q[1]) for q in self._queues]
+        assert all(x[0].frame == self.frame for x in data)
+        return data # -> data = [(world_snapshot, "carla.WorldSnapshot"), (data_sensor_1, type_sensor_1), ..., (data_sensor_n, type_sensor_n)]
 
     def __exit__(self, *args, **kwargs):
         self.world.apply_settings(self._settings)
@@ -108,6 +115,9 @@ def get_font():
     font = pygame.font.match_font(font)
     return pygame.font.Font(font, 14)
 
+def get_sensor(data, sensor_type):
+    return [x[0] for x in data if x[1]==sensor_type][0]
+
 def spawn_camera_sensor(camera_type, world, widht, height, fov, fps, parent_actor, rel_transform):
     # set camera sensor type
     rgb_blueprint = world.get_blueprint_library().find(str(camera_type))
@@ -130,6 +140,26 @@ def spawn_camera_sensor(camera_type, world, widht, height, fov, fps, parent_acto
         rgb_blueprint.set_attribute('gamma', '2.2')
     # spawn sensor and attach it to actor
     return world.spawn_actor(rgb_blueprint, rel_transform, attach_to=parent_actor)
+
+def save_measurements_to_disk(sequence_id, measurements):
+    # prepare paths
+    base_path = "raw/"
+    filename  = "images/" + str(sequence_id).zfill(10)
+    # iterate sensors and store them into appropriate directory
+    for measurement in measurements:
+        if measurement[1] == 'sensor.camera.rgb.left':
+            measurement[0].save_to_disk(base_path + "stereo/left/" + filename + ".png")
+        elif measurement[1] == 'sensor.camera.rgb.right':
+            measurement[0].save_to_disk(base_path + "stereo/right/" + filename + ".png")
+        elif measurement[1] == 'sensor.camera.depth':
+            # TODO logarithmic depth only for debugging, later use raw !!
+            measurement[0].save_to_disk(base_path + "depth/" + filename + ".png", color_converter=carla.ColorConverter.LogarithmicDepth)
+        elif measurement[1] == 'sensor.camera.semantic_segmentation':
+            # TODO logarithmic depth only for debugging, later use raw !!
+            measurement[0].save_to_disk(base_path + "semantic_segmentation/" + filename + ".png", color_converter=carla.ColorConverter.CityScapesPalette)
+        else:
+            # TODO make assert or something else that lets the program stop instead of simple warning
+            print("undefined sensor requested")
 
 def main():
     actor_list = []
@@ -175,6 +205,7 @@ def main():
         vehicle.set_autopilot(True)
 
         ## spawn sensors
+        sensor_list = []
         # define left and right camera poses relative to vehicle
         baseline = 0.5 # baseline in m ? (TODO verify CARLA distance units)
         vehicle_bb = vehicle.bounding_box
@@ -184,41 +215,54 @@ def main():
         # spawn left stereo rgb camera
         camera_rgb_left = spawn_camera_sensor('sensor.camera.rgb', world, sensor_width, sensor_height, 90.0, 0.0, vehicle, cam_rel_transform_l)
         actor_list.append(camera_rgb_left)
+        sensor_list.append((camera_rgb_left, 'sensor.camera.rgb.left'))
         # spawn right stereo rgb camera
         camera_rgb_right = spawn_camera_sensor('sensor.camera.rgb', world, sensor_width, sensor_height, 90.0, 0.0, vehicle, cam_rel_transform_r)
         actor_list.append(camera_rgb_right)
+        sensor_list.append((camera_rgb_right, 'sensor.camera.rgb.right'))
         # spawn depth camera at left camera pose
         camera_depth = spawn_camera_sensor('sensor.camera.depth', world, sensor_width, sensor_height, 90.0, 0.0, vehicle, cam_rel_transform_l)
         actor_list.append(camera_depth)
+        sensor_list.append((camera_depth, 'sensor.camera.depth'))
         # spawn semantic segmentation camera at left camera pose
         camera_semseg = spawn_camera_sensor('sensor.camera.semantic_segmentation', world, sensor_width, sensor_height, 90.0, 0.0, vehicle, cam_rel_transform_l)
         actor_list.append(camera_semseg)
+        sensor_list.append((camera_semseg, 'sensor.camera.semantic_segmentation'))
 
-        # Create a synchronous mode context.
-        with CarlaSyncMode(world, camera_rgb_left, camera_rgb_right, camera_depth, camera_semseg, fps=10) as sync_mode:
+        # prepare buffers for sensor measurements
+        sequence_buffer = queue.Queue()
+        sequence_count  = 0
+        # create a synchronous mode context.
+        with CarlaSyncMode(world, sensor_list, fps=10) as sync_mode:
             while True:
                 if should_quit():
                     return
                 clock.tick()
 
                 ## advance the simulation and wait for the data
-                snapshot, im_rgb_l, im_rgb_r, im_depth, im_semseg = sync_mode.tick(timeout=2.0)
+                data = sync_mode.tick(timeout=2.0)
 
-                # TODO store measurements in buffer
-
-                # TODO write measurements from buffer to disk multithreaded
-
-                ## convert sensor representations for visualization
-                # use logarithmic depth scaling for depth map
-                im_depth.convert(carla.ColorConverter.LogarithmicDepth)
-                # use CityScapes palette for semantic segmentation
-                im_semseg.convert(carla.ColorConverter.CityScapesPalette)
+                ## save data to disk
+                # push measurements into buffer TODO validate threadsafeness !
+                sequence_buffer.put(data[1:]) # don't push snapshot
+                # write measurements from buffer to disk
+                save_measurements_to_disk(sequence_count, sequence_buffer.get()) # TODO make multithreaded TODO go on here next
+                sequence_count += 1
 
                 ## compute simulated fps (for verification)
+                snapshot = get_sensor(data, 'carla.WorldSnapshot')
                 fps = round(1.0 / snapshot.timestamp.delta_seconds)
 
-                # draw images seperatley
+                ## visualize sensor measurements
+                # TODO make it work for arbitary selection of sensors --> reimplement display_sensors
+                im_rgb_l  = get_sensor(data, 'sensor.camera.rgb.left')
+                im_rgb_r  = get_sensor(data, 'sensor.camera.rgb.right')
+                im_depth  = get_sensor(data, 'sensor.camera.depth')
+                im_semseg = get_sensor(data, 'sensor.camera.semantic_segmentation')
+                im_depth.convert(carla.ColorConverter.LogarithmicDepth)
+                im_semseg.convert(carla.ColorConverter.CityScapesPalette)
                 display_sensors(display, im_rgb_l, im_rgb_r, im_depth, im_semseg)
+                # display_sensors(display, data[1:]) <-- this is what the call should look like !!
 
                 # draw left rgb and semantic segmentation overlayed (to verify if left frames are synchronized)
                 # draw_image(display, im_rgb_l)
@@ -230,6 +274,8 @@ def main():
                 pygame.display.flip()
 
     finally:
+        # destroy sequence buffer
+        del sequence_buffer # TODO ensure that all measurements are written to disk before deletion
         # destroy actors and sensors
         print('destroying actors and sensors.')
         for actor in actor_list:
