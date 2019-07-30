@@ -29,5 +29,6 @@ Collection of useful python scripts for the CARLA simulator.
 ** TODO save sensor measurements and GT poses to disk
 *** use same data structure as KITTI
 *** maybe transform GT coord system to KITTI as well ?
+*** write data to buffer first and save to disk in simultanous thread (else runtime of simulation will be heavily affected)
 ** TODO visualize the GT poses with evo-kitti tool to check if the representation is sufficient
 ** TODO record test sequences and test on ORB-SLAM2 (additionally on libVISO2 or my own implementation)
