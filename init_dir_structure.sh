@@ -11,4 +11,4 @@ fi
 mkdir -p raw/stereo/left/images
 mkdir -p raw/stereo/right/images
 mkdir -p raw/depth/images
-mkdir -p raw/semseg/images
+mkdir -p raw/semantic_segmentation/images
