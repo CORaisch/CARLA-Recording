@@ -29,6 +29,8 @@ Collection of useful python scripts for the CARLA simulator.
 ** DONE save sensor measurements to disk 
    CLOSED: [2019-07-30 Tue 21:35]
 *** use same data structure as KITTI
+** TODO transform poses s.t. they start in origin
+*** apply inverste transform of very firsts pose to all poses
 ** DONE save GT poses to disk
    CLOSED: [2019-07-31 Wed 16:09]
 *** maybe transform GT coord system to KITTI as well ?
