@@ -11,6 +11,7 @@ import os
 import sys
 import pygame
 import random
+import math
 import numpy as np
 import carla
 import queue
@@ -98,12 +99,24 @@ def draw_image(surface, image, blend=False):
         image_surface.set_alpha(100)
     surface.blit(image_surface, (0, 0))
 
-def display_sensors(surface, rgb_l, rgb_r, depth, semseg):
-    arr = np.zeros((2*rgb_l.height, 2*rgb_l.width, 3)) # NOTE assuming that all sensors have same size
-    arr[:rgb_l.height, :rgb_l.width, :] = raw_to_np_array(rgb_l)
-    arr[:rgb_l.height, rgb_l.width:, :] = raw_to_np_array(rgb_r)
-    arr[rgb_l.height:, :rgb_l.width, :] = raw_to_np_array(depth)
-    arr[rgb_l.height:, rgb_l.width:, :] = raw_to_np_array(semseg)
+# NOTE assuming that all sensors have same size
+def display_sensors(surface, width, height, data):
+    arr = np.zeros((2*height, 2*width, 3))
+    # retrieve sensors
+    rgb_l = get_sensor(data, 'sensor.camera.rgb.left')
+    rgb_r = get_sensor(data, 'sensor.camera.rgb.right')
+    depth = get_sensor(data, 'sensor.camera.depth')
+    semseg = get_sensor(data, 'sensor.camera.semantic_segmentation')
+    if rgb_l:
+        arr[:height, :width, :] = raw_to_np_array(rgb_l[0])
+    if rgb_r:
+        arr[:height, width:, :] = raw_to_np_array(rgb_r[0])
+    if depth:
+        depth[0].convert(carla.ColorConverter.LogarithmicDepth)
+        arr[height:, :width, :] = raw_to_np_array(depth[0])
+    if semseg:
+        semseg[0].convert(carla.ColorConverter.CityScapesPalette)
+        arr[height:, width:, :] = raw_to_np_array(semseg[0])
     # render to display
     image_surface = pygame.surfarray.make_surface(arr.swapaxes(0, 1))
     surface.blit(image_surface, (0, 0))
@@ -116,7 +129,7 @@ def get_font():
     return pygame.font.Font(font, 14)
 
 def get_sensor(data, sensor_type):
-    return [x[0] for x in data if x[1]==sensor_type][0]
+    return [x[0] for x in data if x[1]==sensor_type]
 
 def spawn_camera_sensor(camera_type, world, widht, height, fov, fps, parent_actor, rel_transform):
     # set camera sensor type
@@ -145,21 +158,50 @@ def save_measurements_to_disk(sequence_id, measurements):
     # prepare paths
     base_path = "raw/"
     filename  = "images/" + str(sequence_id).zfill(10)
-    # iterate sensors and store them into appropriate directory
+    # iterate sensors and store their outputs into appropriate directory
+    gt_transform = None
     for measurement in measurements:
         if measurement[1] == 'sensor.camera.rgb.left':
+            if gt_transform == None:
+                gt_transform = measurement[0].transform
             measurement[0].save_to_disk(base_path + "stereo/left/" + filename + ".png")
         elif measurement[1] == 'sensor.camera.rgb.right':
+            # NOTE dont store poses from right camera because left camera should be mounted then and therefore we can simply store transform from left to right camera
             measurement[0].save_to_disk(base_path + "stereo/right/" + filename + ".png")
         elif measurement[1] == 'sensor.camera.depth':
+            if gt_transform == None:
+                gt_transform = measurement[0].transform
             # TODO logarithmic depth only for debugging, later use raw !!
             measurement[0].save_to_disk(base_path + "depth/" + filename + ".png", color_converter=carla.ColorConverter.LogarithmicDepth)
         elif measurement[1] == 'sensor.camera.semantic_segmentation':
-            # TODO logarithmic depth only for debugging, later use raw !!
+            if gt_transform == None:
+                gt_transform = measurement[0].transform
+            # TODO cityscapes palette only for debugging, later use raw !!
             measurement[0].save_to_disk(base_path + "semantic_segmentation/" + filename + ".png", color_converter=carla.ColorConverter.CityScapesPalette)
         else:
-            # TODO make assert or something else that lets the program stop instead of simple warning
+            # TODO make assert or something else that lets the program stop instead in this case of simple warning
             print("undefined sensor requested")
+    # store left camera poses
+    if gt_transform != None:
+        ## NOTE rotations according to: https://carla.readthedocs.io/en/latest/python_api/#carla.Rotation
+        y =  gt_transform.rotation.yaw
+        p =  gt_transform.rotation.pitch
+        r = -gt_transform.rotation.roll
+        ## store rotation as rotation matrix
+        def c(x):
+            return math.cos(x)
+        def s(x):
+            return math.sin(x)
+        # using: http://planning.cs.uiuc.edu/node102.html -> gt_rotation = R_z(yaw)*R_y(pitch)*R_x(roll)
+        gt_pose  = str(c(y)*c(p)) + " " + str(c(y)*s(p)*s(r)-s(y)*c(r)) + " " + str(c(y)*s(p)*c(r)+s(y)*s(r)) + " " + str(-gt_transform.location.x) + " "
+        gt_pose += str(s(y)*c(p)) + " " + str(s(y)*s(p)*s(r)+c(y)*c(r)) + " " + str(s(y)*s(p)*c(r)-c(y)*s(r)) + " " + str( gt_transform.location.y) + " "
+        gt_pose += str(-s(p))     + " " + str(c(p)*s(r))                + " " + str(c(p)*c(r))                + " " + str( gt_transform.location.z) + "\n"
+        # write to file
+        with open(base_path + "poses.txt", "a") as poses_file:
+            poses_file.write(gt_pose)
+    else:
+        print("no valid sensor attached for  GT poses")
+
 
 def main():
     actor_list = []
@@ -246,23 +288,15 @@ def main():
                 # push measurements into buffer TODO validate threadsafeness !
                 sequence_buffer.put(data[1:]) # don't push snapshot
                 # write measurements from buffer to disk
-                save_measurements_to_disk(sequence_count, sequence_buffer.get()) # TODO make multithreaded TODO go on here next
+                save_measurements_to_disk(sequence_count, sequence_buffer.get()) # TODO call this function threaded
                 sequence_count += 1
 
                 ## compute simulated fps (for verification)
-                snapshot = get_sensor(data, 'carla.WorldSnapshot')
+                snapshot = get_sensor(data, 'carla.WorldSnapshot')[0]
                 fps = round(1.0 / snapshot.timestamp.delta_seconds)
 
                 ## visualize sensor measurements
-                # TODO make it work for arbitary selection of sensors --> reimplement display_sensors
-                im_rgb_l  = get_sensor(data, 'sensor.camera.rgb.left')
-                im_rgb_r  = get_sensor(data, 'sensor.camera.rgb.right')
-                im_depth  = get_sensor(data, 'sensor.camera.depth')
-                im_semseg = get_sensor(data, 'sensor.camera.semantic_segmentation')
-                im_depth.convert(carla.ColorConverter.LogarithmicDepth)
-                im_semseg.convert(carla.ColorConverter.CityScapesPalette)
-                display_sensors(display, im_rgb_l, im_rgb_r, im_depth, im_semseg)
-                # display_sensors(display, data[1:]) <-- this is what the call should look like !!
+                display_sensors(display, sensor_width, sensor_height, data)
 
                 # draw left rgb and semantic segmentation overlayed (to verify if left frames are synchronized)
                 # draw_image(display, im_rgb_l)
