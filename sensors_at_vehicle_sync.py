@@ -184,18 +184,18 @@ def save_measurements_to_disk(sequence_id, measurements):
     # store left camera poses
     if gt_transform != None:
         ## NOTE rotations according to: https://carla.readthedocs.io/en/latest/python_api/#carla.Rotation
-        y =  gt_transform.rotation.yaw
-        p =  gt_transform.rotation.pitch
-        r = -gt_transform.rotation.roll
+        y = gt_transform.rotation.yaw
+        p = gt_transform.rotation.pitch
+        r = gt_transform.rotation.roll
         ## store rotation as rotation matrix
         def c(x):
             return math.cos(x)
         def s(x):
             return math.sin(x)
         # using: http://planning.cs.uiuc.edu/node102.html -> gt_rotation = R_z(yaw)*R_y(pitch)*R_x(roll)
-        gt_pose  = str(c(y)*c(p)) + " " + str(c(y)*s(p)*s(r)-s(y)*c(r)) + " " + str(c(y)*s(p)*c(r)+s(y)*s(r)) + " " + str(-gt_transform.location.x) + " "
-        gt_pose += str(s(y)*c(p)) + " " + str(s(y)*s(p)*s(r)+c(y)*c(r)) + " " + str(s(y)*s(p)*c(r)-c(y)*s(r)) + " " + str( gt_transform.location.y) + " "
-        gt_pose += str(-s(p))     + " " + str(c(p)*s(r))                + " " + str(c(p)*c(r))                + " " + str( gt_transform.location.z) + "\n"
+        gt_pose  = str(c(y)*c(p)) + " " + str(c(y)*s(p)*s(r)-s(y)*c(r)) + " " + str(c(y)*s(p)*c(r)+s(y)*s(r)) + " " + str(gt_transform.location.x) + " "
+        gt_pose += str(s(y)*c(p)) + " " + str(s(y)*s(p)*s(r)+c(y)*c(r)) + " " + str(s(y)*s(p)*c(r)-c(y)*s(r)) + " " + str(gt_transform.location.y) + " "
+        gt_pose += str(-s(p))     + " " + str(c(p)*s(r))                + " " + str(c(p)*c(r))                + " " + str(gt_transform.location.z) + "\n"
         # write to file
         with open(base_path + "poses.txt", "a") as poses_file:
             poses_file.write(gt_pose)

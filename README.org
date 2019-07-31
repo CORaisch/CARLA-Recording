@@ -36,5 +36,7 @@ Collection of useful python scripts for the CARLA simulator.
 ** DONE visualize the GT poses with evo-kitti tool to check if the representation is sufficient
    CLOSED: [2019-07-31 Wed 16:09]
 ** TODO validate GT rotations with extra python tool that visualizes the reference coord frame and the transformed one
+** TODO reconstruct and validate carla world coordinate system
+*** spawn object at origin and other object at {x,y,z} = +1
 ** TODO record test sequences and test on ORB-SLAM2 (additionally on libVISO2 or my own implementation)
 *** write config file for ORB-SLAM2
