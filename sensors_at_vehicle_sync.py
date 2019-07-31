@@ -15,6 +15,11 @@ import math
 import numpy as np
 import carla
 import queue
+import threading
+
+## globals
+is_running = True
+sequence_buffer = queue.Queue()
 
 # NOTE taken from PythonAPI/examples/synchronous_mode.py
 class CarlaSyncMode(object):
@@ -154,6 +159,16 @@ def spawn_camera_sensor(camera_type, world, widht, height, fov, fps, parent_acto
     # spawn sensor and attach it to actor
     return world.spawn_actor(rgb_blueprint, rel_transform, attach_to=parent_actor)
 
+def disk_writer_loop():
+    global is_running
+    global sequence_buffer
+    sequence_id = 0
+    while is_running:
+        while sequence_buffer.qsize():
+            print("measurements in buffer: ", sequence_buffer.qsize())
+            save_measurements_to_disk(sequence_id, sequence_buffer.get())
+            sequence_id += 1
+
 def save_measurements_to_disk(sequence_id, measurements):
     # prepare paths
     base_path = "raw/"
@@ -200,8 +215,7 @@ def save_measurements_to_disk(sequence_id, measurements):
         with open(base_path + "poses.txt", "a") as poses_file:
             poses_file.write(gt_pose)
     else:
-        print("no valid sensor attached for  GT poses")
-
+        print("no valid sensor attached for GT poses")
 
 def main():
     actor_list = []
@@ -271,11 +285,15 @@ def main():
         actor_list.append(camera_semseg)
         sensor_list.append((camera_semseg, 'sensor.camera.semantic_segmentation'))
 
-        # prepare buffers for sensor measurements
-        sequence_buffer = queue.Queue()
-        sequence_count  = 0
+        ## prepare buffers for sensor measurements
+        # sequence_count  = 0
+        global sequence_buffer
+        # invoke disk writer thread
+        disk_writer_thread = threading.Thread(target=disk_writer_loop)
         # create a synchronous mode context.
         with CarlaSyncMode(world, sensor_list, fps=10) as sync_mode:
+            # start disk writer thread
+            disk_writer_thread.start()
             while True:
                 if should_quit():
                     return
@@ -285,11 +303,8 @@ def main():
                 data = sync_mode.tick(timeout=2.0)
 
                 ## save data to disk
-                # push measurements into buffer TODO validate threadsafeness !
+                # push measurements into buffer TODO validate threadsafeness of queue.Queue
                 sequence_buffer.put(data[1:]) # don't push snapshot
-                # write measurements from buffer to disk
-                save_measurements_to_disk(sequence_count, sequence_buffer.get()) # TODO call this function threaded
-                sequence_count += 1
 
                 ## compute simulated fps (for verification)
                 snapshot = get_sensor(data, 'carla.WorldSnapshot')[0]
@@ -308,6 +323,12 @@ def main():
                 pygame.display.flip()
 
     finally:
+        # stop and wait for disk writer thread
+        print("\nwait till remaining sensor measurements are written to disk...", end='')
+        global is_running
+        is_running = False
+        disk_writer_thread.join()
+        print(" done")
         # destroy sequence buffer
         del sequence_buffer # TODO ensure that all measurements are written to disk before deletion
         # destroy actors and sensors
