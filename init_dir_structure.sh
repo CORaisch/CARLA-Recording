@@ -8,7 +8,9 @@ if [ -d "raw" ]; then
 fi
 
 # build directory skeleton for 'raw'
-mkdir -p raw/stereo/left/images
-mkdir -p raw/stereo/right/images
-mkdir -p raw/depth/images
-mkdir -p raw/semantic_segmentation/images
+mkdir -p raw/rgb/left/images
+mkdir -p raw/rgb/right/images
+mkdir -p raw/depth/left/images
+mkdir -p raw/depth/right/images
+mkdir -p raw/semantic_segmentation/left/images
+mkdir -p raw/semantic_segmentation/right/images

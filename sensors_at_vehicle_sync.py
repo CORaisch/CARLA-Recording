@@ -9,6 +9,7 @@
 import glob
 import os
 import sys
+import argparse
 import pygame
 import random
 import math
@@ -108,10 +109,11 @@ def draw_image(surface, image, blend=False):
 def display_sensors(surface, width, height, data):
     arr = np.zeros((2*height, 2*width, 3))
     # retrieve sensors
+    # TODO make function more generic
     rgb_l = get_sensor(data, 'sensor.camera.rgb.left')
     rgb_r = get_sensor(data, 'sensor.camera.rgb.right')
-    depth = get_sensor(data, 'sensor.camera.depth')
-    semseg = get_sensor(data, 'sensor.camera.semantic_segmentation')
+    depth = get_sensor(data, 'sensor.camera.depth.left')
+    semseg = get_sensor(data, 'sensor.camera.semantic_segmentation.left')
     if rgb_l:
         arr[:height, :width, :] = raw_to_np_array(rgb_l[0])
     if rgb_r:
@@ -136,7 +138,13 @@ def get_font():
 def get_sensor(data, sensor_type):
     return [x[0] for x in data if x[1]==sensor_type]
 
-def spawn_camera_sensor(camera_type, world, widht, height, fov, fps, parent_actor, rel_transform):
+def spawn_camera_sensor(sensor_type, world, widht, height, fov, parent_actor, rel_transform, baseline):
+    # set camera type parameter
+    sensor_position = sensor_type.split(sep='.')[-1] # NOTE assuming last string is {left|right}
+    camera_type = 'sensor.camera.' + sensor_type[:-(len(sensor_position)+1)]
+    # set relative transform
+    if sensor_position == 'right':
+            rel_transform.location.y += baseline;
     # set camera sensor type
     rgb_blueprint = world.get_blueprint_library().find(str(camera_type))
     # set image size
@@ -145,8 +153,7 @@ def spawn_camera_sensor(camera_type, world, widht, height, fov, fps, parent_acto
     # set field of view (in deg)
     rgb_blueprint.set_attribute('fov', str(fov))
     # set frame capturing rate
-    sensor_tick = ( (1.0 / fps) if fps != 0.0 else 0.0 ) # sensor_tick == 0 means caputre all frames if possible (always possible in sync mode)
-    rgb_blueprint.set_attribute('sensor_tick', str(sensor_tick))
+    rgb_blueprint.set_attribute('sensor_tick', str(0.0))
     # set special attributes for rgb cameras
     if camera_type == 'sensor.camera.rgb':
         # set motion blur parameters
@@ -157,15 +164,17 @@ def spawn_camera_sensor(camera_type, world, widht, height, fov, fps, parent_acto
         # set target gamma value of camera
         rgb_blueprint.set_attribute('gamma', '2.2')
     # spawn sensor and attach it to actor
-    return world.spawn_actor(rgb_blueprint, rel_transform, attach_to=parent_actor)
+    return world.spawn_actor(rgb_blueprint, rel_transform, attach_to=parent_actor), camera_type+'.'+sensor_position
 
 def disk_writer_loop():
+    import time
     global is_running
     global sequence_buffer
     sequence_id = 0
     while is_running:
         while sequence_buffer.qsize():
-            print("measurements in buffer: ", sequence_buffer.qsize())
+            if not is_running:
+                print(".", end='', flush=True)
             save_measurements_to_disk(sequence_id, sequence_buffer.get())
             sequence_id += 1
 
@@ -176,26 +185,26 @@ def save_measurements_to_disk(sequence_id, measurements):
     # iterate sensors and store their outputs into appropriate directory
     gt_transform = None
     for measurement in measurements:
-        if measurement[1] == 'sensor.camera.rgb.left':
-            if gt_transform == None:
+        sensor_position = measurement[1].split(sep='.')[-1]
+        sensor_type = measurement[1][:-(len(sensor_position)+1)]
+        if sensor_type == 'sensor.camera.rgb':
+            if gt_transform == None and sensor_position == 'left':
                 gt_transform = measurement[0].transform
-            measurement[0].save_to_disk(base_path + "stereo/left/" + filename + ".png")
-        elif measurement[1] == 'sensor.camera.rgb.right':
-            # NOTE dont store poses from right camera because left camera should be mounted then and therefore we can simply store transform from left to right camera
-            measurement[0].save_to_disk(base_path + "stereo/right/" + filename + ".png")
-        elif measurement[1] == 'sensor.camera.depth':
-            if gt_transform == None:
+            measurement[0].save_to_disk(base_path + "rgb/" + sensor_position + "/" + filename + ".png")
+        elif sensor_type == 'sensor.camera.depth':
+            if gt_transform == None and sensor_position == 'left':
                 gt_transform = measurement[0].transform
-            # TODO logarithmic depth only for debugging, later use raw !!
-            measurement[0].save_to_disk(base_path + "depth/" + filename + ".png", color_converter=carla.ColorConverter.LogarithmicDepth)
-        elif measurement[1] == 'sensor.camera.semantic_segmentation':
-            if gt_transform == None:
+            # TODO logarithmic depth only for debugging, later save as raw !!
+            measurement[0].save_to_disk(base_path + "depth/" + sensor_position + "/" + filename + ".png", color_converter=carla.ColorConverter.LogarithmicDepth)
+        elif sensor_type == 'sensor.camera.semantic_segmentation':
+            if gt_transform == None and sensor_position == 'left':
                 gt_transform = measurement[0].transform
-            # TODO cityscapes palette only for debugging, later use raw !!
-            measurement[0].save_to_disk(base_path + "semantic_segmentation/" + filename + ".png", color_converter=carla.ColorConverter.CityScapesPalette)
+            # TODO cityscapes palette only for debugging, later save as raw !!
+            measurement[0].save_to_disk(
+                base_path + "semantic_segmentation/" + sensor_position + "/" + filename + ".png", color_converter=carla.ColorConverter.CityScapesPalette)
         else:
             # TODO make assert or something else that lets the program stop instead in this case of simple warning
-            print("undefined sensor requested")
+            print("undefined sensor requested: ", measurement[1])
     # store left camera poses
     if gt_transform != None:
         ## NOTE rotations according to: https://carla.readthedocs.io/en/latest/python_api/#carla.Rotation
@@ -217,14 +226,29 @@ def save_measurements_to_disk(sequence_id, measurements):
     else:
         print("no valid sensor attached for GT poses")
 
+def get_fov_from_fx(image_widht, fx):
+    return (2.0 * math.atan(image_widht/(2.0*fx))) * 180.0 / math.pi
+
 def main():
+    ## init argument parser
+    argparser = argparse.ArgumentParser(description="Synchronously capture arbitrary sensors while they are attached to a vehicle driving on a random route. Following sensors are supported: RGB, Depth, Semantic Segmentation. Following sensors will be captured by default: Stereo RGB, Depth, Semantic Segmentation. The program outputs the images of the sensors, the ground truth poses and the intrinsics of the cameras.")
+    # add arguments
+    argparser.add_argument('--sensor_width', '-width', type=int, default=800, help="set width for all cameras")
+    argparser.add_argument('--sensor_height', '-height', type=int, default=600, help="set height for all cameras")
+    argparser.add_argument('--fov', '-fov', type=float, default=90.0, help="set FoV for all cameras")
+    argparser.add_argument('--baseline', '-baseline', type=float, default=0.5, help="set baseline for rectified stereo setup (in meter)")
+    argparser.add_argument('--sensors', '-sensors', type=str, default=[], nargs='*', help="add one of the following sensors: 'rgb.{left|right}', 'depth.{left|right}', 'semantic_segmentation.{left|right}'")
+    argparser.add_argument('--left_rel_location', '-left_rel_location', type=float, default=[], nargs=3, help="set relative loation of left camera")
+    argparser.add_argument('--fps', '-fps', type=float, default=10.0, help="set captuing rate of sensors (WARNING don't set value below 10 fps, its not yet supported by CARLA)")
+    # finally parse arguments
+    args = argparser.parse_args()
+
+    ## init pygame
     actor_list = []
     pygame.init()
 
-    sensor_height = 600; sensor_width = 800;
-
     display = pygame.display.set_mode(
-        (sensor_width * 2, sensor_height * 2),
+        (args.sensor_width * 2, args.sensor_height * 2),
         pygame.HWSURFACE | pygame.DOUBLEBUF)
     font = get_font()
     clock = pygame.time.Clock()
@@ -263,27 +287,45 @@ def main():
         ## spawn sensors
         sensor_list = []
         # define left and right camera poses relative to vehicle
-        baseline = 0.5 # baseline in m ? (TODO verify CARLA distance units)
-        vehicle_bb = vehicle.bounding_box
-        cam_rel_transform_l = carla.Transform(carla.Location(x=vehicle_bb.extent.x, y=vehicle_bb.extent.y-baseline/2.0, z=vehicle_bb.extent.z*2.0+0.5))
-        cam_rel_transform_r = carla.Transform(carla.Location(x=vehicle_bb.extent.x, y=vehicle_bb.extent.y+baseline/2.0, z=vehicle_bb.extent.z*2.0+0.5))
+        if not args.left_rel_location:
+            vehicle_bb = vehicle.bounding_box
+            cam_rel_transform_l = carla.Transform(carla.Location(x=vehicle_bb.extent.x, y=vehicle_bb.extent.y-args.baseline/2.0, z=vehicle_bb.extent.z*2.0+0.5))
+        else:
+            pos_x, pos_y, pos_z = args.left_rel_location
+            cam_rel_transform_l = carla.Transform(carla.Location(x=pos_x, y=pos_y-args.baseline/2.0, z=pos_z))
 
-        # spawn left stereo rgb camera
-        camera_rgb_left = spawn_camera_sensor('sensor.camera.rgb', world, sensor_width, sensor_height, 90.0, 0.0, vehicle, cam_rel_transform_l)
-        actor_list.append(camera_rgb_left)
-        sensor_list.append((camera_rgb_left, 'sensor.camera.rgb.left'))
-        # spawn right stereo rgb camera
-        camera_rgb_right = spawn_camera_sensor('sensor.camera.rgb', world, sensor_width, sensor_height, 90.0, 0.0, vehicle, cam_rel_transform_r)
-        actor_list.append(camera_rgb_right)
-        sensor_list.append((camera_rgb_right, 'sensor.camera.rgb.right'))
-        # spawn depth camera at left camera pose
-        camera_depth = spawn_camera_sensor('sensor.camera.depth', world, sensor_width, sensor_height, 90.0, 0.0, vehicle, cam_rel_transform_l)
-        actor_list.append(camera_depth)
-        sensor_list.append((camera_depth, 'sensor.camera.depth'))
-        # spawn semantic segmentation camera at left camera pose
-        camera_semseg = spawn_camera_sensor('sensor.camera.semantic_segmentation', world, sensor_width, sensor_height, 90.0, 0.0, vehicle, cam_rel_transform_l)
-        actor_list.append(camera_semseg)
-        sensor_list.append((camera_semseg, 'sensor.camera.semantic_segmentation'))
+        if not args.sensors:
+            # spawn left stereo rgb camera
+            camera_rgb_left, sensor_id = spawn_camera_sensor(
+                'rgb.left', world, args.sensor_width, args.sensor_height, args.fov, vehicle, cam_rel_transform_l, args.baseline
+            )
+            actor_list.append(camera_rgb_left)
+            sensor_list.append((camera_rgb_left, sensor_id))
+            # spawn right stereo rgb camera
+            camera_rgb_right, sensor_id = spawn_camera_sensor(
+                'rgb.right', world, args.sensor_width, args.sensor_height, args.fov, vehicle, cam_rel_transform_l, args.baseline
+            )
+            actor_list.append(camera_rgb_right)
+            sensor_list.append((camera_rgb_right, sensor_id))
+            # spawn depth camera at left camera pose
+            camera_depth, sensor_id = spawn_camera_sensor(
+                'depth.left', world, args.sensor_width, args.sensor_height, args.fov, vehicle, cam_rel_transform_l, args.baseline
+            )
+            actor_list.append(camera_depth)
+            sensor_list.append((camera_depth, sensor_id))
+            # spawn semantic segmentation camera at left camera pose
+            camera_semseg, sensor_id = spawn_camera_sensor(
+                'semantic_segmentation.left', world, args.sensor_width, args.sensor_height, args.fov, vehicle, cam_rel_transform_l, args.baseline
+            )
+            actor_list.append(camera_semseg)
+            sensor_list.append((camera_semseg, sensor_id))
+        else:
+            for sensor in args.sensors:
+                sensor_actor, sensor_id = spawn_camera_sensor(
+                    sensor, world, args.sensor_width, args.sensor_height, args.fov, vehicle, cam_rel_transform_l, args.baseline
+                )
+                actor_list.append(sensor_actor)
+                sensor_list.append((sensor_actor, sensor_id))
 
         ## prepare buffers for sensor measurements
         # sequence_count  = 0
@@ -291,7 +333,7 @@ def main():
         # invoke disk writer thread
         disk_writer_thread = threading.Thread(target=disk_writer_loop)
         # create a synchronous mode context.
-        with CarlaSyncMode(world, sensor_list, fps=10) as sync_mode:
+        with CarlaSyncMode(world, sensor_list, fps=args.fps) as sync_mode:
             # start disk writer thread
             disk_writer_thread.start()
             while True:
@@ -311,7 +353,7 @@ def main():
                 fps = round(1.0 / snapshot.timestamp.delta_seconds)
 
                 ## visualize sensor measurements
-                display_sensors(display, sensor_width, sensor_height, data)
+                display_sensors(display, args.sensor_width, args.sensor_height, data)
 
                 # draw left rgb and semantic segmentation overlayed (to verify if left frames are synchronized)
                 # draw_image(display, im_rgb_l)
@@ -324,7 +366,7 @@ def main():
 
     finally:
         # stop and wait for disk writer thread
-        print("\nwait till remaining sensor measurements are written to disk...", end='')
+        print("\nwait till remaining sensor measurements are written to disk", end='', flush=True)
         global is_running
         is_running = False
         disk_writer_thread.join()
