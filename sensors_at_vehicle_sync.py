@@ -21,6 +21,7 @@ import threading
 ## globals
 is_running = True
 sequence_buffer = queue.Queue()
+base_path = "raw/"
 
 # NOTE taken from PythonAPI/examples/synchronous_mode.py
 class CarlaSyncMode(object):
@@ -138,7 +139,7 @@ def get_font():
 def get_sensor(data, sensor_type):
     return [x[0] for x in data if x[1]==sensor_type]
 
-def spawn_camera_sensor(sensor_type, world, widht, height, fov, parent_actor, rel_transform, baseline):
+def spawn_camera_sensor(sensor_type, world, widht, height, fov, parent_actor, rel_transform, baseline, base_path):
     # set camera type parameter
     sensor_position = sensor_type.split(sep='.')[-1] # NOTE assuming last string is {left|right}
     camera_type = 'sensor.camera.' + sensor_type[:-(len(sensor_position)+1)]
@@ -170,17 +171,31 @@ def disk_writer_loop():
     import time
     global is_running
     global sequence_buffer
+    global base_path
     sequence_id = 0
     while is_running:
         while sequence_buffer.qsize():
             if not is_running:
                 print(".", end='', flush=True)
-            save_measurements_to_disk(sequence_id, sequence_buffer.get())
+            save_measurements_to_disk(sequence_id, sequence_buffer.get(), base_path)
             sequence_id += 1
 
-def save_measurements_to_disk(sequence_id, measurements):
+# NOTE this function only works if when cameras are adjusted rectified! When using arbitrary camera poses transforms need to be computed appropriately
+def write_camera_intrinsics_to_disk(width, height, fov, baseline, base_path):
+    # compute camera calibration matrix
+    fy = fx = get_fx_from_fov(width, fov)
+    cx = (math.floor(width/2.0) + math.ceil(width/2.0))/2.0
+    cy = (math.floor(height/2.0) + math.ceil(height/2.0))/2.0
+    calibration_str = "K: " + str(fx) + " 0.0 " + str(cx) + " 0.0 " + str(fy) + " " + str(cy) + " 0.0 0.0 1.0\n"
+    # compute stereo transform from left to right camera
+    stereo_transform_str = "T_left_to_right: 1.0 0.0 0.0 " + str(baseline) + " 0.0 1.0 0.0 0.0 0.0 0.0 1.0 0.0\n"
+    # write camera intrinsics to file
+    with open(base_path + "intrinsics.txt", "w") as intrinsics_file:
+        intrinsics_file.write(calibration_str)
+        intrinsics_file.write(stereo_transform_str)
+
+def save_measurements_to_disk(sequence_id, measurements, base_path):
     # prepare paths
-    base_path = "raw/"
     filename  = "images/" + str(sequence_id).zfill(10)
     # iterate sensors and store their outputs into appropriate directory
     gt_transform = None
@@ -224,10 +239,13 @@ def save_measurements_to_disk(sequence_id, measurements):
         with open(base_path + "poses.txt", "a") as poses_file:
             poses_file.write(gt_pose)
     else:
-        print("no valid sensor attached for GT poses")
+        print("WARNING: No valid sensor attached for GT poses. Sensor needs to be attached left in order to get GT poses, else no poses are recorded.")
 
 def get_fov_from_fx(image_widht, fx):
-    return (2.0 * math.atan(image_widht/(2.0*fx))) * 180.0 / math.pi
+    return (2.0 * math.atan(image_widht/(2.0*fx))) * 180.0 / math.pi # NOTE returns fov in deg
+
+def get_fx_from_fov(image_widht, fov): # NOTE expect fov in deg
+    return image_widht/(2*math.tan((fov*math.pi/180.0)/2))
 
 def main():
     ## init argument parser
@@ -240,8 +258,13 @@ def main():
     argparser.add_argument('--sensors', '-sensors', type=str, default=[], nargs='*', help="add one of the following sensors: 'rgb.{left|right}', 'depth.{left|right}', 'semantic_segmentation.{left|right}'")
     argparser.add_argument('--left_rel_location', '-left_rel_location', type=float, default=[], nargs=3, help="set relative loation of left camera")
     argparser.add_argument('--fps', '-fps', type=float, default=10.0, help="set captuing rate of sensors (WARNING don't set value below 10 fps, its not yet supported by CARLA)")
+    argparser.add_argument('--base_path', '-base_path', type=str, default="raw/", help="set base directory where recorded sequences will be stored")
     # finally parse arguments
     args = argparser.parse_args()
+
+    # define base_path
+    global base_path
+    base_path = args.base_path
 
     ## init pygame
     actor_list = []
@@ -297,35 +320,38 @@ def main():
         if not args.sensors:
             # spawn left stereo rgb camera
             camera_rgb_left, sensor_id = spawn_camera_sensor(
-                'rgb.left', world, args.sensor_width, args.sensor_height, args.fov, vehicle, cam_rel_transform_l, args.baseline
+                'rgb.left', world, args.sensor_width, args.sensor_height, args.fov, vehicle, cam_rel_transform_l, args.baseline, base_path
             )
             actor_list.append(camera_rgb_left)
             sensor_list.append((camera_rgb_left, sensor_id))
             # spawn right stereo rgb camera
             camera_rgb_right, sensor_id = spawn_camera_sensor(
-                'rgb.right', world, args.sensor_width, args.sensor_height, args.fov, vehicle, cam_rel_transform_l, args.baseline
+                'rgb.right', world, args.sensor_width, args.sensor_height, args.fov, vehicle, cam_rel_transform_l, args.baseline, base_path
             )
             actor_list.append(camera_rgb_right)
             sensor_list.append((camera_rgb_right, sensor_id))
             # spawn depth camera at left camera pose
             camera_depth, sensor_id = spawn_camera_sensor(
-                'depth.left', world, args.sensor_width, args.sensor_height, args.fov, vehicle, cam_rel_transform_l, args.baseline
+                'depth.left', world, args.sensor_width, args.sensor_height, args.fov, vehicle, cam_rel_transform_l, args.baseline, base_path
             )
             actor_list.append(camera_depth)
             sensor_list.append((camera_depth, sensor_id))
             # spawn semantic segmentation camera at left camera pose
             camera_semseg, sensor_id = spawn_camera_sensor(
-                'semantic_segmentation.left', world, args.sensor_width, args.sensor_height, args.fov, vehicle, cam_rel_transform_l, args.baseline
+                'semantic_segmentation.left', world, args.sensor_width, args.sensor_height, args.fov, vehicle, cam_rel_transform_l, args.baseline, base_path
             )
             actor_list.append(camera_semseg)
             sensor_list.append((camera_semseg, sensor_id))
         else:
             for sensor in args.sensors:
                 sensor_actor, sensor_id = spawn_camera_sensor(
-                    sensor, world, args.sensor_width, args.sensor_height, args.fov, vehicle, cam_rel_transform_l, args.baseline
+                    sensor, world, args.sensor_width, args.sensor_height, args.fov, vehicle, cam_rel_transform_l, args.baseline, base_path
                 )
                 actor_list.append(sensor_actor)
                 sensor_list.append((sensor_actor, sensor_id))
+
+        ## save camera intrinsics to disk
+        write_camera_intrinsics_to_disk(args.sensor_width, args.sensor_height, args.fov, args.baseline, base_path)
 
         ## prepare buffers for sensor measurements
         # sequence_count  = 0
