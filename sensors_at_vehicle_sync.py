@@ -17,11 +17,13 @@ import numpy as np
 import carla
 import queue
 import threading
+import time
 
 ## globals
 is_running = True
 sequence_buffer = queue.Queue()
 base_path = "raw/"
+T_0_inv = np.matrix((4,4))
 
 # NOTE taken from PythonAPI/examples/synchronous_mode.py
 class CarlaSyncMode(object):
@@ -222,24 +224,56 @@ def save_measurements_to_disk(sequence_id, measurements, base_path):
             print("undefined sensor requested: ", measurement[1])
     # store left camera poses
     if gt_transform != None:
-        ## NOTE rotations according to: https://carla.readthedocs.io/en/latest/python_api/#carla.Rotation
-        y = gt_transform.rotation.yaw
-        p = gt_transform.rotation.pitch
-        r = gt_transform.rotation.roll
-        ## store rotation as rotation matrix
         def c(x):
             return math.cos(x)
         def s(x):
             return math.sin(x)
-        # using: http://planning.cs.uiuc.edu/node102.html -> gt_rotation = R_z(yaw)*R_y(pitch)*R_x(roll)
-        gt_pose  = str(c(y)*c(p)) + " " + str(c(y)*s(p)*s(r)-s(y)*c(r)) + " " + str(c(y)*s(p)*c(r)+s(y)*s(r)) + " " + str(gt_transform.location.x) + " "
-        gt_pose += str(s(y)*c(p)) + " " + str(s(y)*s(p)*s(r)+c(y)*c(r)) + " " + str(s(y)*s(p)*c(r)-c(y)*s(r)) + " " + str(gt_transform.location.y) + " "
-        gt_pose += str(-s(p))     + " " + str(c(p)*s(r))                + " " + str(c(p)*c(r))                + " " + str(gt_transform.location.z) + "\n"
-        # write to file
-        with open(base_path + "poses.txt", "a") as poses_file:
-            poses_file.write(gt_pose)
+        # store very first camera pose as reference
+        global T_0_inv
+        if sequence_id == 0:
+            ref_pose = gt_transform
+            T_0 = numpy_mat_from_carla_transform(ref_pose)
+            # store inverse transform
+            R = T_0[:3,:3]; t = T_0[:3, 3];
+            T_0_inv = T_0.copy(); T_0_inv[:3,:3] = R.T; T_0_inv[:3, 3] = -R.T * t;
+
+        # convert gt_transform to numpy matrix
+        T_i = numpy_mat_from_carla_transform(gt_transform)
+        # compute relative pose according to initial pose
+        T_i_orig = T_0_inv.copy() * T_i.copy()
+        # write transformed pose to disk
+        gt_pose_grounded  = str(T_i_orig[0,0]) + " " + str(T_i_orig[0,1]) + " " + str(T_i_orig[0,2]) + " " + str(T_i_orig[0,3]) + " "
+        gt_pose_grounded += str(T_i_orig[1,0]) + " " + str(T_i_orig[1,1]) + " " + str(T_i_orig[1,2]) + " " + str(T_i_orig[1,3]) + " "
+        gt_pose_grounded += str(T_i_orig[2,0]) + " " + str(T_i_orig[2,1]) + " " + str(T_i_orig[2,2]) + " " + str(T_i_orig[2,3]) + "\n"
+        with open(base_path + "poses_grounded.txt", "a") as poses_file:
+            poses_file.write(gt_pose_grounded)
+
+        # write untransformed pose to disk
+        gt_pose_world  = str(T_i[0,0]) + " " + str(T_i[0,1]) + " " + str(T_i[0,2]) + " " + str(T_i[0,3]) + " "
+        gt_pose_world += str(T_i[1,0]) + " " + str(T_i[1,1]) + " " + str(T_i[1,2]) + " " + str(T_i[1,3]) + " "
+        gt_pose_world += str(T_i[2,0]) + " " + str(T_i[2,1]) + " " + str(T_i[2,2]) + " " + str(T_i[2,3]) + "\n"
+        with open(base_path + "poses_world.txt", "a") as poses_file:
+            poses_file.write(gt_pose_world)
+
+        # TODO save relative poses
+
     else:
         print("WARNING: No valid sensor attached for GT poses. Sensor needs to be attached left in order to get GT poses, else no poses are recorded.")
+
+def numpy_mat_from_carla_transform(transform):
+        def c(x):
+            return math.cos(x)
+        def s(x):
+            return math.sin(x)
+        ## NOTE rotations according to: https://carla.readthedocs.io/en/latest/python_api/#carla.Rotation
+        y = transform.rotation.yaw * math.pi / 180.0
+        p = transform.rotation.pitch * math.pi / 180.0
+        r = transform.rotation.roll * math.pi / 180.0
+        # using: http://planning.cs.uiuc.edu/node102.html -> gt_rotation = R_z(yaw)*R_y(pitch)*R_x(roll)
+        return np.matrix([[c(y)*c(p), c(y)*s(p)*s(r)-s(y)*c(r), c(y)*s(p)*c(r)+s(y)*s(r), transform.location.x],
+                          [s(y)*c(p), s(y)*s(p)*s(r)+c(y)*c(r), s(y)*s(p)*c(r)-c(y)*s(r), transform.location.y],
+                          [-s(p),     c(p)*s(r),                c(p)*c(r),                transform.location.z],
+                          [0.0,       0.0,                      0.0,                      1.0                 ]])
 
 def get_fov_from_fx(image_widht, fx):
     return (2.0 * math.atan(image_widht/(2.0*fx))) * 180.0 / math.pi # NOTE returns fov in deg
@@ -259,6 +293,7 @@ def main():
     argparser.add_argument('--left_rel_location', '-left_rel_location', type=float, default=[], nargs=3, help="set relative loation of left camera")
     argparser.add_argument('--fps', '-fps', type=float, default=10.0, help="set captuing rate of sensors (WARNING don't set value below 10 fps, its not yet supported by CARLA)")
     argparser.add_argument('--base_path', '-base_path', type=str, default="raw/", help="set base directory where recorded sequences will be stored")
+    argparser.add_argument('--traffic_light_timings', '-traffic_light_timings', type=float, default=[1.0, 0.5, 2.0], nargs=3, help="set duration in seconds for how long traffic lights are on (format: R Y G)")
     # finally parse arguments
     args = argparser.parse_args()
 
@@ -291,10 +326,12 @@ def main():
 
         ## setup world properties
         # set traffic light timings
+        d_red, d_yellow, d_green = args.traffic_light_timings
         for traffic_light in world.get_actors().filter('traffic.traffic_light'):
-            traffic_light.set_red_time(1.0)
-            traffic_light.set_yellow_time(0.5)
-            traffic_light.set_green_time(2.0)
+            traffic_light.set_red_time(d_red)
+            traffic_light.set_yellow_time(d_yellow)
+            traffic_light.set_green_time(d_green)
+
         # TODO set random weather state of world
 
         # get list of actor blueprints
@@ -374,6 +411,10 @@ def main():
                 # push measurements into buffer TODO validate threadsafeness of queue.Queue
                 sequence_buffer.put(data[1:]) # don't push snapshot
 
+                ## beg DEBUG
+                # time.sleep(0.5) # wait short ammount of time to give thread time NOTE comment this out when not on server
+                ## end DEBUG
+
                 ## compute simulated fps (for verification)
                 snapshot = get_sensor(data, 'carla.WorldSnapshot')[0]
                 fps = round(1.0 / snapshot.timestamp.delta_seconds)
@@ -396,7 +437,7 @@ def main():
         global is_running
         is_running = False
         disk_writer_thread.join()
-        print(" done")
+        print(". done")
         # destroy sequence buffer
         del sequence_buffer # TODO ensure that all measurements are written to disk before deletion
         # destroy actors and sensors
@@ -405,7 +446,6 @@ def main():
             actor.destroy()
 
         pygame.quit()
-        print('done.')
 
 
 if __name__ == '__main__':

@@ -23,7 +23,8 @@ Collection of useful python scripts for the CARLA simulator.
 ** DONE save sensor measurements to disk 
    CLOSED: [2019-07-30 Tue 21:35]
 *** use same data structure as KITTI
-** TODO transform poses s.t. they start in origin
+** DONE transform poses s.t. they start in origin
+   CLOSED: [2019-08-02 Fri 14:23]
 *** apply inverste transform of very firsts pose to all poses
 ** TODO make display_sensors function more generic, s.t. arbitrary sensors (or selections from them) will be visualized
 ** DONE save GT poses to disk
@@ -35,9 +36,15 @@ Collection of useful python scripts for the CARLA simulator.
    CLOSED: [2019-08-01 Thu 00:25]
 ** DONE visualize the GT poses with evo-kitti tool to check if the representation is sufficient
    CLOSED: [2019-07-31 Wed 16:09]
-** TODO validate GT rotations with extra python tool that visualizes the reference coord frame and the transformed one
+** DONE validate rotation matrix computed from yaw, pitch, roll
+   CLOSED: [2019-08-02 Fri 13:39]
+*** rotate test-vectors with rotation matrix and with carla.Transform.transform(...) function and compare results
+** TODO save frame-to-fram relative poses to disk
+** TODO validate GT rotations with extra tool that visualizes the pose orientations
+*** write simple py-ros tool that reads in the trajectories from simultor and outputs geometry_msgs/Pose on a topic -> record rosbag from topic -> visualize with rviz
 ** TODO provide transform between CARLA coordinate system and the one from OpenCV
-** TODO reconstruct and validate carla world coordinate system
+** DONE reconstruct and validate carla world coordinate system
+   CLOSED: [2019-08-02 Fri 10:32]
 *** spawn object at origin and other object at {x,y,z} = +1
 ** TODO record test sequences and test on ORB-SLAM2 (additionally on libVISO2 or my own implementation)
 *** write config file for ORB-SLAM2
