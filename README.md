@@ -1,6 +1,15 @@
 # README
 This repo contains a collection of useful python scripts helping to record and analyse datasets from the CARLA simulator.
 
+## Build Instructions
+### Building ROS Workspace
+Go into the `ros_workspace` subdirectory and build with `catkin`:
+```
+cd ros_workspace
+catkin_make
+```
+Before using the rospy scripts you need to source the setup file: `source devel/setup.{bash|zsh}`.
+
 ## Dataset Generation
 * Before you can generate sequences from CARLA you need to launch the CARLA server. Therefore switch into the CARLA install directory and e.g. launch the `CarlaUE4.sh` script. Most server settings will be set from my scripts. If you want to load another map, type: `CarlaUE4.sh TownXX`. For more information go to [CARLA website](http://carla.org/)
 * To generate a dataset use the script `sensors_at_vehicle_sync.py`. It will spawn a vehicle at a random location in the map that is currently loaded on the server. Right now the following sensors are available:
