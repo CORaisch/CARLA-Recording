@@ -11,11 +11,11 @@ catkin_make
 Before using the rospy scripts you need to source the setup file: `source devel/setup.{bash|zsh}`.
 
 ## Dataset Generation
-* Before you can generate sequences from CARLA you need to launch the CARLA server. Therefore switch into the CARLA install directory and e.g. launch the `CarlaUE4.sh` script. Most server settings will be set from my scripts. If you want to load another map, type: `CarlaUE4.sh TownXX`. For more information go to [CARLA website](http://carla.org/)
+* Before you can generate sequences from CARLA you need to launch the CARLA server. Therefore switch into the CARLA install directory and e.g. launch the `CarlaUE4.sh` script. Most server settings will be set from my scripts. If you want to load another map, type: `CarlaUE4.sh TownXX`. For more information go to [CARLA website](http://carla.org/).
 * To generate a dataset use the script `sensors_at_vehicle_sync.py`. It will spawn a vehicle at a random location in the map that is currently loaded on the server. Right now the following sensors are available:
-    * RGB Camera _rgb.{left|right}_
-    * Depth Camera _depth.{left|right}_
-    * Semantic Segmentation Camera _semantic\_segmentation.{left|right}
+    * RGB Camera `rgb.{left|right}`
+    * Depth Camera `depth.{left|right}`
+    * Semantic Segmentation Camera `semantic_segmentation.{left|right}`
 * You can place as many sensors at the same place as you want. So far these sensors can be spawned at two different locations, left and right. The left position can be given with the `-left_rel_location` option. The right location is then computed from the left location and the baseline, which can be set with `-baseline` option. In this way the script ensures that it will record rectified stereo images. However it is planed to add an option that allows for arbitrary sensor settings given a .JSON file. Additionally you can capture the senor data at any framerate above 10 (this limitation comes from CARLA itself, see [this](https://carla.readthedocs.io/en/latest/configuring_the_simulation/)), but keep in mind that with a higher captuing rate the simulation itself will slow down. For more options use the help text from the script by running with `-h`.
 
 ## Dataset Analysis
