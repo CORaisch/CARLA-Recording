@@ -200,22 +200,25 @@ def save_measurements_to_disk(sequence_id, measurements, base_path):
     # prepare paths
     filename  = "images/" + str(sequence_id).zfill(10)
     # iterate sensors and store their outputs into appropriate directory
-    gt_transform = None
+    gt_transform = None; gt_timestamp = 0.0;
     for measurement in measurements:
         sensor_position = measurement[1].split(sep='.')[-1]
         sensor_type = measurement[1][:-(len(sensor_position)+1)]
         if sensor_type == 'sensor.camera.rgb':
             if gt_transform == None and sensor_position == 'left':
                 gt_transform = measurement[0].transform
+                gt_timestamp = measurement[0].timestamp
             measurement[0].save_to_disk(base_path + "rgb/" + sensor_position + "/" + filename + ".png")
         elif sensor_type == 'sensor.camera.depth':
             if gt_transform == None and sensor_position == 'left':
                 gt_transform = measurement[0].transform
+                gt_timestamp = measurement[0].timestamp
             # TODO logarithmic depth only for debugging, later save as raw !!
             measurement[0].save_to_disk(base_path + "depth/" + sensor_position + "/" + filename + ".png", color_converter=carla.ColorConverter.LogarithmicDepth)
         elif sensor_type == 'sensor.camera.semantic_segmentation':
             if gt_transform == None and sensor_position == 'left':
                 gt_transform = measurement[0].transform
+                gt_timestamp = measurement[0].timestamp
             # TODO cityscapes palette only for debugging, later save as raw !!
             measurement[0].save_to_disk(
                 base_path + "semantic_segmentation/" + sensor_position + "/" + filename + ".png", color_converter=carla.ColorConverter.CityScapesPalette)
@@ -255,7 +258,11 @@ def save_measurements_to_disk(sequence_id, measurements, base_path):
         with open(base_path + "poses_world.txt", "a") as poses_file:
             poses_file.write(gt_pose_world)
 
-        # TODO save relative poses
+        # save timestamp
+        with open(base_path + "timestamps.txt", "a") as stamps_file:
+            stamps_file.write(str(gt_timestamp) + "\n")
+
+        # TODO save relative pose
 
     else:
         print("WARNING: No valid sensor attached for GT poses. Sensor needs to be attached left in order to get GT poses, else no poses are recorded.")
