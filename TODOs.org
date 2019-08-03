@@ -1,8 +1,7 @@
-#+TITLE: README
+#+TITLE: TODOs
 #+OPTIONS: tex:t
 #+OPTIONS: toc:nil
-Collection of useful python scripts for the CARLA simulator.
-* TODOs
+* High Priority
 ** DONE to synchronize all sensors and to furthermore be able to simulate at any wanted framerates guide the implementation according to 'examples/synchronous_mode.py'
    CLOSED: [2019-07-29 Mon 13:16]
 ** TODO sensors_at_vehicle_sync.py does not run when client and server are invoked on different machines
@@ -19,7 +18,6 @@ Collection of useful python scripts for the CARLA simulator.
    CLOSED: [2019-07-29 Mon 11:49]
 ** DONE add command line argument parser to support for command line arguments 
    CLOSED: [2019-08-01 Thu 16:25]
-** TODO add command line argument that allows for setting arbitrary sensor constellations using .JSON file
 ** DONE save sensor measurements to disk 
    CLOSED: [2019-07-30 Tue 21:35]
 *** use same data structure as KITTI
@@ -39,8 +37,9 @@ Collection of useful python scripts for the CARLA simulator.
 ** DONE validate rotation matrix computed from yaw, pitch, roll
    CLOSED: [2019-08-02 Fri 13:39]
 *** rotate test-vectors with rotation matrix and with carla.Transform.transform(...) function and compare results
-** TODO save frame-to-fram relative poses to disk
-** TODO validate GT rotations with extra tool that visualizes the pose orientations
+** TODO save frame-to-frame relative poses to disk
+** DONE validate GT rotations with extra tool that visualizes the pose orientations
+   CLOSED: [2019-08-03 Sat 22:46]
 *** write simple py-ros tool that reads in the trajectories from simultor and outputs geometry_msgs/Pose on a topic -> record rosbag from topic -> visualize with rviz
 ** TODO provide transform between CARLA coordinate system and the one from OpenCV
 ** DONE reconstruct and validate carla world coordinate system
@@ -48,7 +47,10 @@ Collection of useful python scripts for the CARLA simulator.
 *** spawn object at origin and other object at {x,y,z} = +1
 ** TODO record test sequences and test on ORB-SLAM2 (additionally on libVISO2 or my own implementation)
 *** write config file for ORB-SLAM2
+
+* Low Priority
 ** TODO add random weather selection at start
 ** TODO add command line argument for weather presets
 ** TODO add support for dynamic scenes by adding vehicles and pedestrians to the world
 ** TODO add command line argument for static/dynamic world
+** TODO add command line argument that allows for setting arbitrary sensor constellations using .JSON file
