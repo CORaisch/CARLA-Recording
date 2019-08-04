@@ -46,7 +46,7 @@ def convert_poses(filename, poses, stamps):
             sys.stdout.flush()
     finally:
         # give information
-        print("the poses array will be published at '/carla_poses' and the path will be published to '/carla_odom'")
+        print("\nthe poses array will be published at '/carla_poses' and the path will be published to '/carla_odom'")
         bag.close()
         print("done")
 

@@ -42,7 +42,7 @@ def convert_poses(filename, poses):
             sys.stdout.flush()
     finally:
         # give information
-        print("the poses array will be published at '/carla_poses' and the path will be published to '/carla_odom'")
+        print("\nthe poses array will be published at '/carla_poses' and the path will be published to '/carla_odom'")
         # write to bag file
         poses_array_msg = PoseArray(header, poses_array)
         path_msg = Path(header, poses_stamped_array)
