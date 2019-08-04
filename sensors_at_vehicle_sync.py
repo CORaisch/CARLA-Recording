@@ -183,18 +183,35 @@ def disk_writer_loop():
             sequence_id += 1
 
 # NOTE this function only works if when cameras are adjusted rectified! When using arbitrary camera poses transforms need to be computed appropriately
-def write_camera_intrinsics_to_disk(width, height, fov, baseline, base_path):
+def write_config_to_disk(args):
     # compute camera calibration matrix
-    fy = fx = get_fx_from_fov(width, fov)
-    cx = (math.floor(width/2.0) + math.ceil(width/2.0))/2.0
-    cy = (math.floor(height/2.0) + math.ceil(height/2.0))/2.0
-    calibration_str = "K: " + str(fx) + " 0.0 " + str(cx) + " 0.0 " + str(fy) + " " + str(cy) + " 0.0 0.0 1.0\n"
+    fx = fy = get_f_from_fov(args.sensor_width, args.fov)
+    cx = (math.floor(args.sensor_width/2.0) + math.ceil(args.sensor_width/2.0))/2.0
+    cy = (math.floor(args.sensor_height/2.0) + math.ceil(args.sensor_height/2.0))/2.0
+    K_str = "K: " + str(fx) + " 0.0 " + str(cx) + " 0.0 " + str(fy) + " " + str(cy) + " 0.0 0.0 1.0\n"
     # compute stereo transform from left to right camera
-    stereo_transform_str = "T_left_to_right: 1.0 0.0 0.0 " + str(baseline) + " 0.0 1.0 0.0 0.0 0.0 0.0 1.0 0.0\n"
+    T_left_to_right_str = "T_left_to_right: 1.0 0.0 0.0 " + str(args.baseline) + " 0.0 1.0 0.0 0.0 0.0 0.0 1.0 0.0\n"
+    # compose string for left relative location of camera
+    pos_x, pos_y, pos_z = args.left_rel_location
+    left_rel_pos_str = "left camera transform relative to vehicle: 1.0 0.0 0.0 " + str(pos_x) + " 0.0 1.0 0.0 " + str(pos_y) + " 0.0 0.0 1.0 " + str(pos_z) + "\n"
+    # compose list of all sensors that were attached for the sequence
+    sensors_str = "attached sensors: "
+    for sensor in args.sensors:
+        sensors_str += sensor + " "
+    sensors_str += "\n"
     # write camera intrinsics to file
-    with open(base_path + "intrinsics.txt", "w") as intrinsics_file:
-        intrinsics_file.write(calibration_str)
-        intrinsics_file.write(stereo_transform_str)
+    with open(base_path + "config.txt", "w") as conf_file:
+        conf_file.write("## Camera Sensor Specific Data\n")
+        conf_file.write(K_str)
+        conf_file.write("image width: {0}\n".format(args.sensor_width))
+        conf_file.write("image height: {0}\n".format(args.sensor_height))
+        conf_file.write("horizontal field of view: {0}\n".format(args.fov))
+        conf_file.write(left_rel_pos_str)
+        conf_file.write("stereo baseline: {0}\n".format(args.baseline))
+        conf_file.write(T_left_to_right_str)
+        conf_file.write("fps: {0}\n".format(args.fps))
+        conf_file.write(sensors_str)
+        conf_file.write("## Simulation Specific Data\n")
 
 def save_measurements_to_disk(sequence_id, measurements, base_path):
     # prepare paths
@@ -233,9 +250,16 @@ def save_measurements_to_disk(sequence_id, measurements, base_path):
             return math.sin(x)
         # store very first camera pose as reference
         global T_0_inv
+        global T_0_inv_2
         if sequence_id == 0:
             ref_pose = gt_transform
             T_0 = numpy_mat_from_carla_transform(ref_pose)
+            # write reference pose to config file -> in that way the absolute trajectory can be reconstructed afterwards
+            ref_pose_str  = str(T_0[0,0]) + " " + str(T_0[0,1]) + " " + str(T_0[0,2]) + " " + str(T_0[0,3]) + " "
+            ref_pose_str += str(T_0[1,0]) + " " + str(T_0[1,1]) + " " + str(T_0[1,2]) + " " + str(T_0[1,3]) + " "
+            ref_pose_str += str(T_0[2,0]) + " " + str(T_0[2,1]) + " " + str(T_0[2,2]) + " " + str(T_0[2,3]) + "\n"
+            with open(base_path + "config.txt", "a") as conf_file:
+                conf_file.write("initial absolute pose: {0}".format(ref_pose_str))
             # store inverse transform
             R = T_0[:3,:3]; t = T_0[:3, 3];
             T_0_inv = T_0.copy(); T_0_inv[:3,:3] = R.T; T_0_inv[:3, 3] = -R.T * t;
@@ -243,20 +267,13 @@ def save_measurements_to_disk(sequence_id, measurements, base_path):
         # convert gt_transform to numpy matrix
         T_i = numpy_mat_from_carla_transform(gt_transform)
         # compute relative pose according to initial pose
-        T_i_orig = T_0_inv.copy() * T_i.copy()
-        # write transformed pose to disk
-        gt_pose_grounded  = str(T_i_orig[0,0]) + " " + str(T_i_orig[0,1]) + " " + str(T_i_orig[0,2]) + " " + str(T_i_orig[0,3]) + " "
-        gt_pose_grounded += str(T_i_orig[1,0]) + " " + str(T_i_orig[1,1]) + " " + str(T_i_orig[1,2]) + " " + str(T_i_orig[1,3]) + " "
-        gt_pose_grounded += str(T_i_orig[2,0]) + " " + str(T_i_orig[2,1]) + " " + str(T_i_orig[2,2]) + " " + str(T_i_orig[2,3]) + "\n"
-        with open(base_path + "poses_grounded.txt", "a") as poses_file:
-            poses_file.write(gt_pose_grounded)
-
-        # write untransformed pose to disk
-        gt_pose_world  = str(T_i[0,0]) + " " + str(T_i[0,1]) + " " + str(T_i[0,2]) + " " + str(T_i[0,3]) + " "
-        gt_pose_world += str(T_i[1,0]) + " " + str(T_i[1,1]) + " " + str(T_i[1,2]) + " " + str(T_i[1,3]) + " "
-        gt_pose_world += str(T_i[2,0]) + " " + str(T_i[2,1]) + " " + str(T_i[2,2]) + " " + str(T_i[2,3]) + "\n"
-        with open(base_path + "poses_world.txt", "a") as poses_file:
-            poses_file.write(gt_pose_world)
+        T_i_nulled = T_0_inv.copy() * T_i.copy()
+        # write nulled pose to disk
+        gt_pose_nulled  = str(T_i_nulled[0,0]) + " " + str(T_i_nulled[0,1]) + " " + str(T_i_nulled[0,2]) + " " + str(T_i_nulled[0,3]) + " "
+        gt_pose_nulled += str(T_i_nulled[1,0]) + " " + str(T_i_nulled[1,1]) + " " + str(T_i_nulled[1,2]) + " " + str(T_i_nulled[1,3]) + " "
+        gt_pose_nulled += str(T_i_nulled[2,0]) + " " + str(T_i_nulled[2,1]) + " " + str(T_i_nulled[2,2]) + " " + str(T_i_nulled[2,3]) + "\n"
+        with open(base_path + "poses_nulled.txt", "a") as poses_file:
+            poses_file.write(gt_pose_nulled)
 
         # save timestamp
         with open(base_path + "timestamps.txt", "a") as stamps_file:
@@ -272,20 +289,21 @@ def numpy_mat_from_carla_transform(transform):
             return math.cos(x)
         def s(x):
             return math.sin(x)
-        ## NOTE rotations according to: https://carla.readthedocs.io/en/latest/python_api/#carla.Rotation
-        y = transform.rotation.yaw * math.pi / 180.0
-        p = transform.rotation.pitch * math.pi / 180.0
-        r = transform.rotation.roll * math.pi / 180.0
+        ## NOTE rotation angles given according to: https://carla.readthedocs.io/en/latest/python_api/#carla.Rotation
+        # transform angles to right handed coordinate system, note the rotation angle definitions in UE4 frame listed above
+        y = -transform.rotation.yaw   * math.pi / 180.0
+        p = -transform.rotation.pitch * math.pi / 180.0
+        r =  transform.rotation.roll  * math.pi / 180.0
         # using: http://planning.cs.uiuc.edu/node102.html -> gt_rotation = R_z(yaw)*R_y(pitch)*R_x(roll)
-        return np.matrix([[c(y)*c(p), c(y)*s(p)*s(r)-s(y)*c(r), c(y)*s(p)*c(r)+s(y)*s(r), transform.location.x],
-                          [s(y)*c(p), s(y)*s(p)*s(r)+c(y)*c(r), s(y)*s(p)*c(r)-c(y)*s(r), transform.location.y],
-                          [-s(p),     c(p)*s(r),                c(p)*c(r),                transform.location.z],
-                          [0.0,       0.0,                      0.0,                      1.0                 ]])
+        return np.matrix([[c(y)*c(p), c(y)*s(p)*s(r)-s(y)*c(r), c(y)*s(p)*c(r)+s(y)*s(r),  transform.location.x],
+                          [s(y)*c(p), s(y)*s(p)*s(r)+c(y)*c(r), s(y)*s(p)*c(r)-c(y)*s(r), -transform.location.y],
+                          [-s(p),     c(p)*s(r),                c(p)*c(r),                 transform.location.z],
+                          [0.0,       0.0,                      0.0,                       1.0                 ]])
 
 def get_fov_from_fx(image_widht, fx):
     return (2.0 * math.atan(image_widht/(2.0*fx))) * 180.0 / math.pi # NOTE returns fov in deg
 
-def get_fx_from_fov(image_widht, fov): # NOTE expect fov in deg
+def get_f_from_fov(image_widht, fov): # NOTE expect fov in deg
     return image_widht/(2*math.tan((fov*math.pi/180.0)/2))
 
 def main():
@@ -329,7 +347,6 @@ def main():
         # set random spawning location of sensor carrying vehicle
         m = world.get_map()
         start_pose = random.choice(m.get_spawn_points())
-        waypoint = m.get_waypoint(start_pose.location)
 
         ## setup world properties
         # set traffic light timings
@@ -339,7 +356,9 @@ def main():
             traffic_light.set_yellow_time(d_yellow)
             traffic_light.set_green_time(d_green)
 
-        # TODO set random weather state of world
+        # TODO set weather state of world
+
+        # TODO spawn vehicles and pedestrians
 
         # get list of actor blueprints
         blueprint_library = world.get_blueprint_library()
@@ -357,6 +376,7 @@ def main():
         if not args.left_rel_location:
             vehicle_bb = vehicle.bounding_box
             cam_rel_transform_l = carla.Transform(carla.Location(x=vehicle_bb.extent.x, y=vehicle_bb.extent.y-args.baseline/2.0, z=vehicle_bb.extent.z*2.0+0.5))
+            args.left_rel_location = [vehicle_bb.extent.x, vehicle_bb.extent.y-args.baseline/2.0, vehicle_bb.extent.z*2.0+0.5]
         else:
             pos_x, pos_y, pos_z = args.left_rel_location
             cam_rel_transform_l = carla.Transform(carla.Location(x=pos_x, y=pos_y-args.baseline/2.0, z=pos_z))
@@ -394,11 +414,10 @@ def main():
                 actor_list.append(sensor_actor)
                 sensor_list.append((sensor_actor, sensor_id))
 
-        ## save camera intrinsics to disk
-        write_camera_intrinsics_to_disk(args.sensor_width, args.sensor_height, args.fov, args.baseline, base_path)
+        ## save simulation configuration to disk
+        write_config_to_disk(args)
 
         ## prepare buffers for sensor measurements
-        # sequence_count  = 0
         global sequence_buffer
         # invoke disk writer thread
         disk_writer_thread = threading.Thread(target=disk_writer_loop)
