@@ -1,6 +1,7 @@
 #+TITLE: TODOs
 #+OPTIONS: tex:t
 #+OPTIONS: toc:nil
+
 * High Priority
 ** DONE to synchronize all sensors and to furthermore be able to simulate at any wanted framerates guide the implementation according to 'examples/synchronous_mode.py'
    CLOSED: [2019-07-29 Mon 13:16]
@@ -24,6 +25,21 @@
 ** DONE transform poses s.t. they start in origin
    CLOSED: [2019-08-02 Fri 14:23]
 *** apply inverste transform of very firsts pose to all poses
+** TODO rename intrinsics.txt to config.txt and store several relevant informations about the simulation like:
+*** sensor specific information
+**** camera intrinsics [x]
+**** image size of sensor measurements [x]
+**** horizontal field of view [x]
+**** left location of the cameras relative to the vehicle [x]
+**** stereo baseline [x]
+**** left-to-right transform in camera space [x]
+**** which sensors have been captured [x]
+**** fps of sensors [x]
+*** simulation specific information
+**** initial absolute pose -> with providing that we do not have to store 'posese_world.txt' anymore [x]
+**** number of vehicles and pedestrians []
+**** weather preset []
+
 ** TODO make display_sensors function more generic, s.t. arbitrary sensors (or selections from them) will be visualized
 ** DONE save GT poses to disk
    CLOSED: [2019-07-31 Wed 16:09]
