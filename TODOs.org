@@ -25,7 +25,8 @@
 ** DONE transform poses s.t. they start in origin
    CLOSED: [2019-08-02 Fri 14:23]
 *** apply inverste transform of very firsts pose to all poses
-** TODO rename intrinsics.txt to config.txt and store several relevant informations about the simulation like:
+** DONE rename intrinsics.txt to config.txt and store several relevant informations about the simulation like:
+   CLOSED: [2019-08-05 Mon 12:35]
 *** sensor specific information
 **** camera intrinsics [x]
 **** image size of sensor measurements [x]
@@ -52,7 +53,10 @@
 ** DONE validate rotation matrix computed from yaw, pitch, roll
    CLOSED: [2019-08-02 Fri 13:39]
 *** rotate test-vectors with rotation matrix and with carla.Transform.transform(...) function and compare results
-** TODO save frame-to-frame relative poses to disk
+** DONE save frame-to-frame relative poses to disk
+   CLOSED: [2019-08-05 Mon 15:38]
+** DONE validate relative poses by concatenating them to back to absolute trajectory
+   CLOSED: [2019-08-05 Mon 17:40]
 ** DONE validate GT rotations with extra tool that visualizes the pose orientations
    CLOSED: [2019-08-03 Sat 22:46]
 *** write simple py-ros tool that reads in the trajectories from simultor and outputs geometry_msgs/Pose on a topic -> record rosbag from topic -> visualize with rviz

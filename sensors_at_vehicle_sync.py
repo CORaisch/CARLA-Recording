@@ -24,6 +24,7 @@ is_running = True
 sequence_buffer = queue.Queue()
 base_path = "raw/"
 T_0_inv = np.matrix((4,4))
+T_last = np.matrix((4,4))
 
 # NOTE taken from PythonAPI/examples/synchronous_mode.py
 class CarlaSyncMode(object):
@@ -251,9 +252,11 @@ def save_measurements_to_disk(sequence_id, measurements, base_path):
         # store very first camera pose as reference
         global T_0_inv
         global T_0_inv_2
+        global T_last
         if sequence_id == 0:
             ref_pose = gt_transform
             T_0 = numpy_mat_from_carla_transform(ref_pose)
+            T_last = T_0.copy()
             # write reference pose to config file -> in that way the absolute trajectory can be reconstructed afterwards
             ref_pose_str  = str(T_0[0,0]) + " " + str(T_0[0,1]) + " " + str(T_0[0,2]) + " " + str(T_0[0,3]) + " "
             ref_pose_str += str(T_0[1,0]) + " " + str(T_0[1,1]) + " " + str(T_0[1,2]) + " " + str(T_0[1,3]) + " "
@@ -279,7 +282,26 @@ def save_measurements_to_disk(sequence_id, measurements, base_path):
         with open(base_path + "timestamps.txt", "a") as stamps_file:
             stamps_file.write(str(gt_timestamp) + "\n")
 
-        # TODO save relative pose
+        # save relative pose
+        gt_pose_rel = ""
+        if sequence_id == 0:
+            # relative pose at t[0] == T_0_nulled
+            gt_pose_rel = gt_pose_nulled
+        else:
+            # compute inverse of T_last
+            R_last = T_last[:3,:3]; t_last = T_last[:3, 3];
+            T_last_inv = T_last.copy(); T_last_inv[:3,:3] = R_last.T; T_last_inv[:3, 3] = -R_last.T * t_last;
+            # compute relative pose from t[i-1] to t[i]
+            T_rel = T_last_inv * T_i
+            # compose string
+            gt_pose_rel  = str(T_rel[0,0]) + " " + str(T_rel[0,1]) + " " + str(T_rel[0,2]) + " " + str(T_rel[0,3]) + " "
+            gt_pose_rel += str(T_rel[1,0]) + " " + str(T_rel[1,1]) + " " + str(T_rel[1,2]) + " " + str(T_rel[1,3]) + " "
+            gt_pose_rel += str(T_rel[2,0]) + " " + str(T_rel[2,1]) + " " + str(T_rel[2,2]) + " " + str(T_rel[2,3]) + "\n"
+            # update T_last
+            T_last = T_i.copy()
+        # write relative pose to disk
+        with open(base_path + "relative_poses_nulled.txt", "a") as poses_file:
+            poses_file.write(gt_pose_rel)
 
     else:
         print("WARNING: No valid sensor attached for GT poses. Sensor needs to be attached left in order to get GT poses, else no poses are recorded.")
