@@ -17,6 +17,14 @@ Before using the rospy scripts you need to source the setup file: `source devel/
     * Depth Camera `depth.{left|right}`
     * Semantic Segmentation Camera `semantic_segmentation.{left|right}`
 * You can place as many sensors at the same place as you want. So far these sensors can be spawned at two different locations, left and right. The left position can be given with the `-left_rel_location` option. The right location is then computed from the left location and the baseline, which can be set with `-baseline` option. In this way the script ensures that it will record rectified stereo images. However it is planed to add an option that allows for arbitrary sensor settings given a .JSON file. Additionally you can capture the senor data at any framerate above 10 (this limitation comes from CARLA itself, see [this](https://carla.readthedocs.io/en/latest/configuring_the_simulation/)), but keep in mind that with a higher captuing rate the simulation itself will slow down. For more options use the help text from the script by running with `-h`.
+* The script `sensors_at_vehicle_sync.py` will produce the following files:
+    * `config.txt` stores useful information about the sensors used at the simulation aswell as about the simulation itself. In the following the non-obvious ones will be described:
+        * `K` holds the calibration matrix for the camera sensors used at the simulation.
+        * `T_left_to_right` is the transform from the left to the right camera in a stereo setting and is defined in camera space.
+        * `initial absolute pose` holds the very first absolute pose with respect to the world coordinate frame of the map loaded at the simulation. It can be used to recover the absolute trajectory within this map.
+    * `timestamps.txt` stores a timestamp for each frame taken of one of the cameras (right now all cameras have the same timestamp since we do not allow for asynchrone recording yet).
+    * `poses_nulled.txt` stores the GT poses of the sensors transformed to the origin (i.e. with respect to T=(0,0,0) and R=I).
+    * `relative_poses_nulled.txt` stores the GT poses from above but represented pairwise relative. I.e. the relative pose written in line `i` of the file is the transform from the absolute pose at `i-1` to `i` (or simply, the pose in `i` is  the camera movement from `i-1` to `i`). This representation could for example be used as labels for the training of a DNN.
 
 ## Dataset Analysis
 * to analyse the trajectories I'm using [evo](https://github.com/MichaelGrupp/evo).
