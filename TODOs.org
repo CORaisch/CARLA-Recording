@@ -40,7 +40,6 @@
 **** initial absolute pose -> with providing that we do not have to store 'posese_world.txt' anymore [x]
 **** number of vehicles and pedestrians []
 **** weather preset []
-** TODO make display_sensors function more generic, s.t. arbitrary sensors (or selections from them) will be visualized
 ** DONE save GT poses to disk
    CLOSED: [2019-07-31 Wed 16:09]
 *** maybe transform GT coord system to KITTI as well ?
@@ -70,8 +69,10 @@
 *** spawn object at origin and other object at {x,y,z} = +1
 ** TODO record test sequences and test on ORB-SLAM2 (additionally on libVISO2 or my own implementation)
 *** write config file for ORB-SLAM2
+*** start from 'stereo_kitti' and make example test function for CARLA: 'stereo_carla'
 
 * Low Priority
+** TODO make display_sensors function more generic, s.t. arbitrary sensors (or selections from them) will be visualized
 ** TODO add random weather selection at start
 ** TODO add command line argument for weather presets
 ** TODO add support for dynamic scenes by adding vehicles and pedestrians to the world
