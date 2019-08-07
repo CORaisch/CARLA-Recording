@@ -43,6 +43,7 @@
 ** DONE save GT poses to disk
    CLOSED: [2019-07-31 Wed 16:09]
 *** maybe transform GT coord system to KITTI as well ?
+** TODO shift timestamps s.t. they start at 0.0 seconds
 ** DONE save camera intrinsics to disk
    CLOSED: [2019-08-01 Thu 18:35]
 ** DONE write sensor measurements to buffer first and save to disk in simultanous thread (else runtime of simulation will be heavily affected)
@@ -67,7 +68,8 @@
 ** DONE reconstruct and validate carla world coordinate system
    CLOSED: [2019-08-02 Fri 10:32]
 *** spawn object at origin and other object at {x,y,z} = +1
-** TODO record test sequences and test on ORB-SLAM2 (additionally on libVISO2 or my own implementation)
+** DONE record test sequences and test on ORB-SLAM2 (additionally on libVISO2 or my own implementation)
+   CLOSED: [2019-08-07 Wed 14:23]
 *** write config file for ORB-SLAM2
 *** start from 'stereo_kitti' and make example test function for CARLA: 'stereo_carla'
 
