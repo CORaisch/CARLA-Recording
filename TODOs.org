@@ -43,7 +43,8 @@
 ** DONE save GT poses to disk
    CLOSED: [2019-07-31 Wed 16:09]
 *** maybe transform GT coord system to KITTI as well ?
-** TODO shift timestamps s.t. they start at 0.0 seconds
+** DONE shift timestamps s.t. they start at 0.0 seconds
+   CLOSED: [2019-08-07 Wed 14:36]
 ** DONE save camera intrinsics to disk
    CLOSED: [2019-08-01 Thu 18:35]
 ** DONE write sensor measurements to buffer first and save to disk in simultanous thread (else runtime of simulation will be heavily affected)

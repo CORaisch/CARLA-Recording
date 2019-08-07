@@ -25,6 +25,7 @@ sequence_buffer = queue.Queue()
 base_path = "raw/"
 T_0_inv = np.matrix((4,4))
 T_last = np.matrix((4,4))
+timestamp_ref = None
 
 # NOTE taken from PythonAPI/examples/synchronous_mode.py
 class CarlaSyncMode(object):
@@ -278,9 +279,13 @@ def save_measurements_to_disk(sequence_id, measurements, base_path):
         with open(base_path + "poses_nulled.txt", "a") as poses_file:
             poses_file.write(gt_pose_nulled)
 
-        # save timestamp
+        # in order to shift the timestamps s.t. it starts at 0.0 sec we need to store the initial timestamp -> timestamp_ref
+        global timestamp_ref
+        if timestamp_ref == None:
+            timestamp_ref = gt_timestamp
+        # save timestamps
         with open(base_path + "timestamps.txt", "a") as stamps_file:
-            stamps_file.write(str(gt_timestamp) + "\n")
+            stamps_file.write(str(gt_timestamp-timestamp_ref) + "\n")
 
         # save relative pose
         gt_pose_rel = ""
