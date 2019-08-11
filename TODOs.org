@@ -2,6 +2,18 @@
 #+OPTIONS: tex:t
 #+OPTIONS: toc:nil
 
+* Milestones
+** DONE make framework to automatically generate datasets from the CARLA simulator
+   CLOSED: [2019-08-11 Sun 17:47]
+** TODO make framework that takes datasets from the CARLA simulator and transforms them into a valid representation for DNN learning with Keras
+** TODO implement DNN to learn model to solve the VO problem
+** TODO implement tools to analyse the training data in order to find out potential concentrations and low variances within the training data
+** TODO additionally train same models on KITTI (as it is usaually done) and compare results with the models trained on synthetic data
+** TODO also support for unsupervised DVO models and compare to other results
+*** maybe this is not necessary since we are trying to come up with an alternative solution to overcome the lack-of-data-problem of DVO
+*** only incorporate this part if I want to show the disadvantage(s) of using an unsupervised loss
+**** but therefore I need to first find theoretical argument(s) for the disadvantage(s) 
+
 * High Priority
 ** DONE to synchronize all sensors and to furthermore be able to simulate at any wanted framerates guide the implementation according to 'examples/synchronous_mode.py'
    CLOSED: [2019-07-29 Mon 13:16]
