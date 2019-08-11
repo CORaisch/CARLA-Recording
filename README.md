@@ -24,7 +24,7 @@ Before using the rospy scripts you need to source the setup file: `source devel/
         * `initial absolute pose` holds the very first absolute pose with respect to the world coordinate frame of the map loaded at the simulation. It can be used to recover the absolute trajectory within this map.
     * `timestamps.txt` stores a timestamp for each frame taken of one of the cameras (right now all cameras have the same timestamp since we do not allow for asynchrone recording yet).
     * `poses_nulled.txt` stores the GT poses of the sensors transformed to the origin (i.e. with respect to T=(0,0,0) and R=I).
-    * `relative_poses_nulled.txt` stores the GT poses from above but represented pairwise relative. I.e. the relative pose written in line `i` of the file is the transform from the absolute pose at `i-1` to `i` (or simply, the pose in `i` is  the camera movement from `i-1` to `i`). This representation could for example be used as labels for the training of a DNN.
+    * `relative_poses_nulled.txt` stores the GT poses from above but represented pairwise relative. I.e. the relative pose written in line `i` of the file is the transform from the absolute pose at `i-1` to `i` (or simply, the pose in `i` is  the camera movement from `i-1` to `i`). This representation could for example be used as labels for the training of a DNN. The relative poses are computed by left multiplying the inverse transform from `i-1` with the one from `i`, so to recover the absolute poses from the relative ones compute: ![equation](https://latex.codecogs.com/gif.latex?%28T_%7Bi-1%7D%29%5E%7B-1%7D%5Ccdot%5Chspace%7B%7D%5EiT_%7Bi-1%7D%3DT_i).
 
 ## Dataset Analysis
 * to analyse the trajectories I'm using [evo](https://github.com/MichaelGrupp/evo).
