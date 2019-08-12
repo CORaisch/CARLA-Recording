@@ -341,7 +341,7 @@ def main():
     argparser.add_argument('--sensor_height', '-height', type=int, default=600, help="set height for all cameras")
     argparser.add_argument('--fov', '-fov', type=float, default=90.0, help="set FoV for all cameras")
     argparser.add_argument('--baseline', '-baseline', type=float, default=0.5, help="set baseline for rectified stereo setup (in meter)")
-    argparser.add_argument('--sensors', '-sensors', type=str, default=[], nargs='*', help="add one of the following sensors: 'rgb.{left|right}', 'depth.{left|right}', 'semantic_segmentation.{left|right}'")
+    argparser.add_argument('--sensors', '-sensors', type=str, default=["rgb.left", "rgb.right", "depth.left", "semantic_segmentation.left"], nargs='*', help="add one of the following sensors: 'rgb.{left|right}', 'depth.{left|right}', 'semantic_segmentation.{left|right}'")
     argparser.add_argument('--left_rel_location', '-left_rel_location', type=float, default=[], nargs=3, help="set relative loation of left camera")
     argparser.add_argument('--fps', '-fps', type=float, default=10.0, help="set captuing rate of sensors (WARNING don't set value below 10 fps, its not yet supported by CARLA)")
     argparser.add_argument('--base_path', '-base_path', type=str, default="raw/", help="set base directory where recorded sequences will be stored")
@@ -399,7 +399,7 @@ def main():
 
         ## spawn sensors
         sensor_list = []
-        # define left and right camera poses relative to vehicle
+        # define left camera poses relative to vehicle
         if not args.left_rel_location:
             vehicle_bb = vehicle.bounding_box
             cam_rel_transform_l = carla.Transform(carla.Location(x=vehicle_bb.extent.x, y=vehicle_bb.extent.y-args.baseline/2.0, z=vehicle_bb.extent.z*2.0+0.5))
@@ -408,38 +408,13 @@ def main():
             pos_x, pos_y, pos_z = args.left_rel_location
             cam_rel_transform_l = carla.Transform(carla.Location(x=pos_x, y=pos_y-args.baseline/2.0, z=pos_z))
 
-        if not args.sensors:
-            # spawn left stereo rgb camera
-            camera_rgb_left, sensor_id = spawn_camera_sensor(
-                'rgb.left', world, args.sensor_width, args.sensor_height, args.fov, vehicle, cam_rel_transform_l, args.baseline, base_path
+        # create sensors given from arguments
+        for sensor in args.sensors:
+            sensor_actor, sensor_id = spawn_camera_sensor(
+                sensor, world, args.sensor_width, args.sensor_height, args.fov, vehicle, cam_rel_transform_l, args.baseline, base_path
             )
-            actor_list.append(camera_rgb_left)
-            sensor_list.append((camera_rgb_left, sensor_id))
-            # spawn right stereo rgb camera
-            camera_rgb_right, sensor_id = spawn_camera_sensor(
-                'rgb.right', world, args.sensor_width, args.sensor_height, args.fov, vehicle, cam_rel_transform_l, args.baseline, base_path
-            )
-            actor_list.append(camera_rgb_right)
-            sensor_list.append((camera_rgb_right, sensor_id))
-            # spawn depth camera at left camera pose
-            camera_depth, sensor_id = spawn_camera_sensor(
-                'depth.left', world, args.sensor_width, args.sensor_height, args.fov, vehicle, cam_rel_transform_l, args.baseline, base_path
-            )
-            actor_list.append(camera_depth)
-            sensor_list.append((camera_depth, sensor_id))
-            # spawn semantic segmentation camera at left camera pose
-            camera_semseg, sensor_id = spawn_camera_sensor(
-                'semantic_segmentation.left', world, args.sensor_width, args.sensor_height, args.fov, vehicle, cam_rel_transform_l, args.baseline, base_path
-            )
-            actor_list.append(camera_semseg)
-            sensor_list.append((camera_semseg, sensor_id))
-        else:
-            for sensor in args.sensors:
-                sensor_actor, sensor_id = spawn_camera_sensor(
-                    sensor, world, args.sensor_width, args.sensor_height, args.fov, vehicle, cam_rel_transform_l, args.baseline, base_path
-                )
-                actor_list.append(sensor_actor)
-                sensor_list.append((sensor_actor, sensor_id))
+            actor_list.append(sensor_actor)
+            sensor_list.append((sensor_actor, sensor_id))
 
         ## save simulation configuration to disk
         write_config_to_disk(args)
