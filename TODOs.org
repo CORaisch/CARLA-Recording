@@ -76,7 +76,8 @@
 ** DONE transform GT poses from CARLA coordinate system to right handed one
    CLOSED: [2019-08-04 Sun 18:34]
 
-** TODO validate if x (roll) rotation is correctly transformed too
+** DONE validate if x (roll) rotation is correctly transformed too
+   CLOSED: [2019-08-12 Mon 10:53]
 *** make a sequence with 'sensors_at_spectator.py'
 ** DONE reconstruct and validate carla world coordinate system
    CLOSED: [2019-08-02 Fri 10:32]
