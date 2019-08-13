@@ -1,0 +1,9 @@
+<launch>
+
+  <!-- define arguments -->
+  <arg name="poses_file" />
+
+  <!-- launch nodes -->
+  <node name="pose_to_bag_converter_complete" type="pose_to_bag_converter_complete.py" pkg="trajectory_visualization" output="screen" args="--poses $(arg poses_file)" required="true" /> 
+
+</launch>

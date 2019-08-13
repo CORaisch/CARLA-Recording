@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/python2
 import numpy as np
 import argparse
 import sys
@@ -56,7 +56,7 @@ if __name__ == '__main__':
         # setup argument parser
         argparser = argparse.ArgumentParser(description="Converts a recorded CARALA sequence into a ROS-bag file. It takes the GT poses and reconstructs the trajectory at once. It outputs the poses at ROS-topic /carla_poses and the path at /carla_odom. It can be used to visualize the trajectory in RViz.")
         argparser.add_argument('--poses', '-poses', type=str, help="path to GT poses from CARLA sequence")
-        args = argparser.parse_args()
+        args, unknown = argparser.parse_known_args() # ignore args added by roslaunch
 
         # read in carla poses as numpy matrices
         filename = args.poses

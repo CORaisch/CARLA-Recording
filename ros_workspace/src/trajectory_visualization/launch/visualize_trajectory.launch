@@ -1,0 +1,12 @@
+<launch>
+
+  <!-- define command line arguments -->
+  <arg name="rosbag_file" />
+  <arg name="rviz_config_file" />
+
+  <!-- launch nodes -->
+  <node name="tf" pkg="tf" type="static_transform_publisher" args="0 0 0 0 0 0 1 map carla_frame 10" />
+  <node name="rviz" pkg="rviz" type="rviz" args="-d $(arg rviz_config_file)" required="true" />
+  <node name="player" pkg="rosbag" type="play" args="$(arg rosbag_file)" />
+
+</launch>

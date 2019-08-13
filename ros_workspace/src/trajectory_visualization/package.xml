@@ -1,25 +1,22 @@
 <?xml version="1.0"?>
 <package format="2">
-  <name>poses_to_bag</name>
+  <name>trajectory_visualization</name>
   <version>0.0.1</version>
-  <description>Tool that reads in poses from a raw .txt file and publishes them as geometry_msgs/Pose message.</description>
+  <description>Tools that records CARLA GT data into rosbag files in order to visualize them with rviz.</description>
 
   <!-- One maintainer tag required, multiple allowed, one person per tag -->
   <maintainer email="claudio.raisch@hotmail.de">Claudio Raisch</maintainer>
 
-
   <!-- One license tag required, multiple allowed, one license per tag -->
   <license>BSD</license>
-
 
   <!-- Author tags are optional, multiple are allowed, one per tag -->
   <author email="claudio.raisch@hotmail.de">Claudio Raisch</author>
 
-
   <!-- The *depend tags are used to specify dependencies -->
   <!-- Dependencies can be catkin packages or system dependencies -->
   <buildtool_depend>catkin</buildtool_depend>
-  <build_depend>tf2</build_depend>
+  <build_depend>tf</build_depend>
   <build_depend>geometry_msgs</build_depend>
   <build_depend>rospy</build_depend>
   <build_depend>std_msgs</build_depend>
@@ -27,7 +24,7 @@
   <build_export_depend>geometry_msgs</build_export_depend>
   <build_export_depend>rospy</build_export_depend>
   <build_export_depend>std_msgs</build_export_depend>
-  <exec_depend>tf2</exec_depend>
+  <exec_depend>tf</exec_depend>
   <exec_depend>geometry_msgs</exec_depend>
   <exec_depend>rospy</exec_depend>
   <exec_depend>std_msgs</exec_depend>
