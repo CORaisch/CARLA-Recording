@@ -4,12 +4,12 @@ This repo contains a collection of useful python scripts helping to record and a
 ## Build Instructions
 
 ### Setup CARLA
-The scripts provided here aim to run on the nightly buids of CARLA. In order to use the python interface with CARLA at the current nightly build you need to ensure that the correct python libs are used. DO NOT install the carla packages from pip since they will not be the latest. Instead go to [CARLA release page](https://github.com/carla-simulator/carla/blob/master/Docs/download.md) and download the `CARLA nightly build` archive. Unpack it wherever you want and set your PYTHONPATH environment variable to the following:
+The scripts provided here aim to run on the nightly builds of CARLA. In order to use CARLAs python interface at the nightly version you need to ensure that the correct python libs are used. DO NOT INSTALL the carla packages from pip since they will not be the latest. Instead go to [CARLA release page](https://github.com/carla-simulator/carla/blob/master/Docs/download.md) and download the `CARLA nightly build` archive. Unpack it wherever you want and set your `PYTHONPATH` environment variable to the following:
 ```
 CARLA_ROOT=/path/to/carla/root/directory
 export PYTHONPATH=${PYTHONPATH}:${CARLA_ROOT}/PythonAPI/carla/dist/carla-X.Y.Z-py3.5-linux-x86_64.egg:${CARLA_ROOT}/PythonAPI
 ```
-where `X, Y, Z` are the digits of the current realease version. Now python 3 will additionally search at `CARLA_ROOT` for installed packages. 
+where `X, Y, Z` are the digits of the current realease version. Now python 3 will additionally search at `CARLA_ROOT` for installed packages. You can simply copy these lines into your `.zshrc` or `.bashrc`.
 
 ### Building ROS Workspace
 Go into the `ros_workspace` subdirectory and build with `catkin`:
