@@ -2,99 +2,88 @@
 #+OPTIONS: tex:t
 #+OPTIONS: toc:nil
 
-* Milestones
-** DONE make framework to automatically generate datasets from the CARLA simulator
-   CLOSED: [2019-08-11 Sun 17:47]
-** TODO make framework that takes datasets from the CARLA simulator and transforms them into a valid representation for DNN learning with Keras
-** TODO implement DNN to learn model to solve the VO problem
-** TODO implement tools to analyse the training data in order to find out potential concentrations and low variances within the training data
-** TODO additionally train same models on KITTI (as it is usaually done) and compare results with the models trained on synthetic data
-** TODO also support for unsupervised DVO models and compare to other results
-*** maybe this is not necessary since we are trying to come up with an alternative solution to overcome the lack-of-data-problem of DVO
-*** only incorporate this part if I want to show the disadvantage(s) of using an unsupervised loss
-**** but therefore I need to first find theoretical argument(s) for the disadvantage(s) 
-
-* High Priority
-** DONE to synchronize all sensors and to furthermore be able to simulate at any wanted framerates guide the implementation according to 'examples/synchronous_mode.py'
-   CLOSED: [2019-07-29 Mon 13:16]
-** TODO sensors_at_vehicle_sync.py does not run when client and server are invoked on different machines
-*** TODO try: move code for spawning actors into 'CarlaSyncMode' context, i.e. after lines 'with CarlaSyncMode(...'
-**** maybe the asynchronizity is comming from the fact that the sensors are spawned not within synchronous mode and therefore start capturing at different times
-*** TODO try: test old implementation of 'synchronous_mode.py' (version 0.9.5)
-**** if it will run remotely aswell as locally than try upwards through git commits till the version that does not run anymore and figure out the buggy line
-**** if it will not run remotely then the problem maybe relates closer to the subsystem and should no longer be investigated -> maybe then ask in forum ?
-** DONE add stereo camera support, i.e. add additional camera sensor right of current one
-   CLOSED: [2019-07-29 Mon 11:49]
-** DONE add depth camera support placed at same position as left RGB camera
-   CLOSED: [2019-07-29 Mon 11:49]
-** DONE add semantic segmantation camera support placed at same position as left RGB camera
-   CLOSED: [2019-07-29 Mon 11:49]
-** DONE add command line argument parser to support for command line arguments 
-   CLOSED: [2019-08-01 Thu 16:25]
-** DONE save sensor measurements to disk 
-   CLOSED: [2019-07-30 Tue 21:35]
-*** use same data structure as KITTI
-** DONE transform poses s.t. they start in origin
-   CLOSED: [2019-08-02 Fri 14:23]
-*** apply inverste transform of very firsts pose to all poses
-** DONE rename intrinsics.txt to config.txt and store several relevant informations about the simulation like:
-   CLOSED: [2019-08-05 Mon 12:35]
-*** sensor specific information
-**** camera intrinsics [x]
-**** image size of sensor measurements [x]
-**** horizontal field of view [x]
-**** left location of the cameras relative to the vehicle [x]
-**** stereo baseline [x]
-**** left-to-right transform in camera space [x]
-**** which sensors have been captured [x]
-**** fps of sensors [x]
-*** simulation specific information
-**** initial absolute pose -> with providing that we do not have to store 'posese_world.txt' anymore [x]
-**** number of vehicles and pedestrians []
-**** weather preset []
-** DONE save GT poses to disk
-   CLOSED: [2019-07-31 Wed 16:09]
-*** maybe transform GT coord system to KITTI as well ?
-** DONE shift timestamps s.t. they start at 0.0 seconds
-   CLOSED: [2019-08-07 Wed 14:36]
-** DONE save camera intrinsics to disk
-   CLOSED: [2019-08-01 Thu 18:35]
-** DONE write sensor measurements to buffer first and save to disk in simultanous thread (else runtime of simulation will be heavily affected)
-   CLOSED: [2019-08-01 Thu 00:25]
-** DONE visualize the GT poses with evo-kitti tool to check if the representation is sufficient
-   CLOSED: [2019-07-31 Wed 16:09]
-** DONE validate rotation matrix computed from yaw, pitch, roll
-   CLOSED: [2019-08-02 Fri 13:39]
-*** rotate test-vectors with rotation matrix and with carla.Transform.transform(...) function and compare results
-** DONE save frame-to-frame relative poses to disk
-   CLOSED: [2019-08-05 Mon 15:38]
-** DONE validate relative poses by concatenating them to back to absolute trajectory
-   CLOSED: [2019-08-05 Mon 17:40]
-** DONE validate GT rotations with extra tool that visualizes the pose orientations
-   CLOSED: [2019-08-03 Sat 22:46]
-*** write simple py-ros tool that reads in the trajectories from simultor and outputs geometry_msgs/Pose on a topic -> record rosbag from topic -> visualize with rviz
-** DONE transform GT poses from CARLA coordinate system to right handed one
-   CLOSED: [2019-08-04 Sun 18:34]
-
-** DONE validate if x (roll) rotation is correctly transformed too
-   CLOSED: [2019-08-12 Mon 10:53]
-*** make a sequence with 'sensors_at_spectator.py'
-** DONE reconstruct and validate carla world coordinate system
-   CLOSED: [2019-08-02 Fri 10:32]
-*** spawn object at origin and other object at {x,y,z} = +1
-** DONE record test sequences and test on ORB-SLAM2 (additionally on libVISO2 or my own implementation)
-   CLOSED: [2019-08-07 Wed 14:23]
-*** write config file for ORB-SLAM2
-*** start from 'stereo_kitti' and make example test function for CARLA: 'stereo_carla'
-
-** DONE write roslaunch script to easily visualize trajectory with rviz
-   CLOSED: [2019-08-13 Tue 12:57]
-** DONE write roslaunch script to easily convert GT poses to bagfile
-   CLOSED: [2019-08-13 Tue 12:57]
-* Low Priority
-** TODO make display_sensors function more generic, s.t. arbitrary sensors (or selections from them) will be visualized
-** TODO add random weather selection at start
-** TODO add command line argument for weather presets
-** TODO add support for dynamic scenes by adding vehicles and pedestrians to the world
-** TODO add command line argument for static/dynamic world
-** TODO add command line argument that allows for setting arbitrary sensor constellations using .JSON file
+* Dataset Generation from CARLA
+** High Priority
+*** DONE to synchronize all sensors and to furthermore be able to simulate at any wanted framerates guide the implementation according to 'examples/synchronous_mode.py'
+    CLOSED: [2019-08-16 Fri 09:08]
+*** TODO sensors_at_vehicle_sync.py does not run when client and server are invoked on different machines
+**** TODO try: move code for spawning actors into 'CarlaSyncMode' context, i.e. after lines 'with CarlaSyncMode(...'
+***** maybe the asynchronizity is comming from the fact that the sensors are spawned not within synchronous mode and therefore start capturing at different times
+**** TODO try: test old implementation of 'synchronous_mode.py' (version 0.9.5)
+***** if it will run remotely aswell as locally than try upwards through git commits till the version that does not run anymore and figure out the buggy line
+***** if it will not run remotely then the problem maybe relates closer to the subsystem and should no longer be investigated -> maybe then ask in forum ?
+*** DONE add stereo camera support, i.e. add additional camera sensor right of current one
+    CLOSED: [2019-08-16 Fri 09:08]
+*** DONE add depth camera support placed at same position as left RGB camera
+    CLOSED: [2019-07-29 Mon 11:49]
+*** DONE add semantic segmantation camera support placed at same position as left RGB camera
+    CLOSED: [2019-07-29 Mon 11:49]
+*** DONE add command line argument parser to support for command line arguments 
+    CLOSED: [2019-08-01 Thu 16:25]
+*** DONE save sensor measurements to disk 
+    CLOSED: [2019-07-30 Tue 21:35]
+**** use same data structure as KITTI
+*** DONE transform poses s.t. they start in origin
+    CLOSED: [2019-08-16 Fri 09:11]
+*** DONE rename intrinsics.txt to config.txt and store several relevant informations about the simulation like:
+    CLOSED: [2019-08-16 Fri 09:11]
+*** DONE save GT poses to disk
+    CLOSED: [2019-08-16 Fri 09:11]
+*** DONE shift timestamps s.t. they start at 0.0 seconds
+    CLOSED: [2019-08-16 Fri 09:11]
+*** DONE save camera intrinsics to disk
+    CLOSED: [2019-08-16 Fri 09:11]
+*** DONE write sensor measurements to buffer first and save to disk in simultanous thread (else runtime of simulation will be heavily affected)
+    CLOSED: [2019-08-16 Fri 09:11]
+*** DONE visualize the GT poses with evo-kitti tool to check if the representation is sufficient
+    CLOSED: [2019-08-16 Fri 09:11]
+*** DONE validate rotation matrix computed from yaw, pitch, roll
+    CLOSED: [2019-08-16 Fri 09:11]
+*** DONE save frame-to-frame relative poses to disk
+    CLOSED: [2019-08-16 Fri 09:11]
+*** DONE validate relative poses by concatenating them to back to absolute trajectory
+    CLOSED: [2019-08-16 Fri 09:11]
+*** DONE validate GT rotations with extra tool that visualizes the pose orientations
+    CLOSED: [2019-08-16 Fri 09:11]
+*** DONE transform GT poses from CARLA coordinate system to right handed one
+    CLOSED: [2019-08-16 Fri 09:11]
+*** DONE validate if x (roll) rotation is correctly transformed too
+    CLOSED: [2019-08-16 Fri 09:11]
+*** DONE reconstruct and validate carla world coordinate system
+    CLOSED: [2019-08-16 Fri 09:11]
+*** DONE record test sequences and test on ORB-SLAM2 (additionally on libVISO2 or my own implementation)
+    CLOSED: [2019-08-16 Fri 09:11]
+*** DONE write roslaunch script to easily visualize trajectory with rviz
+    CLOSED: [2019-08-16 Fri 09:11]
+*** DONE write roslaunch script to easily convert GT poses to bagfile
+    CLOSED: [2019-08-16 Fri 09:11]
+** Low Priority
+*** TODO make display_sensors function more generic, s.t. arbitrary sensors (or selections from them) will be visualized
+*** TODO add random weather selection at start
+*** TODO add command line argument for weather presets
+*** TODO add support for dynamic scenes by adding vehicles and pedestrians to the world
+*** TODO add command line argument for static/dynamic world
+*** TODO add command line argument that allows for setting arbitrary sensor constellations using .JSON file
+* Dataset Preparation
+** reflect in which format the configuration should be supported
+** parameters config-file should support
+*** TODO RGB/Grayscale
+*** TODO size of input images
+*** TODO sequence length
+**** how many consecutive frames in time should be used per training data (e.g. use frames at t1, t2 and t3)
+*** TODO sequence width
+**** how many frames should be used per time (e.g. monocular, stereo, etc.)
+*** TODO labe selection
+****  if sequence width is greater than 2 the user needs to select between which frames the relative motion should be trained
+*** TODO preprocessing of input images
+**** offer presets of common filtering operations
+**** reflect ways on how to offer callback for more flexible usage
+*** TODO training location
+**** train on local CPU, local GPU or on cluster 
+*** TODO training mode
+**** online or offline training
+* CNN Implementation
+** use Tensorflow 1, Tensorflow 2 or PyTorch ?
+* Dataset Analysis
+* KITTI Training for Reference
+* Unsupervised Model Support
