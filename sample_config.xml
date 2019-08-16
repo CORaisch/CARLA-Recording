@@ -1,0 +1,54 @@
+<?xml version="1.0" ?>
+
+<config>
+
+  <!-- specify properties of data input to the model -->
+  <input>
+    <!-- images: set size and format of input images -->
+    <images>
+      <format>rgb</format>
+      <width>860</width>
+      <height>480</height>
+    </images>
+    <!-- length: how many consecutive images in time should the model have as input -->
+    <length>2</length>
+    <!-- frames: specify type of data passed as input to the model -->
+    <!-- specify stereo rgb input -->
+    <frame type="rgb">
+      <!-- width: how many simultanous captured images of that frame should the model have as input (e.g. Mono=1, Stereo=2, ...) -->
+      <width>2</width>
+    </frame>
+    <!-- specify monocular depth input -->
+    <frame type="depth">
+      <!-- width: how many simultanous captured images of that frame should the model have as input (e.g. Mono=1, Stereo=2, ...) -->
+      <width>1</width>
+    </frame>
+    <!-- specify monocular semantic segmentation input -->
+    <frame type="semantic_segmentation">
+      <!-- width: how many simultanous captured images of that frame should the model have as input (e.g. Mono=1, Stereo=2, ...) -->
+      <width>1</width>
+    </frame>
+    <!-- label: select from which two images the relative pose should be infered -->
+    <label>
+      <start>1</start>
+      <end  >2</end>
+    </label>
+  </input>
+
+  <!-- specify preprocessing of the input data -->
+  <preprocessing>
+    <!-- filtering: select filter from presets which should be applied to input images before passing to model -->
+    <filtering>none</filtering>
+  </preprocessing>
+
+  <!-- specify training properties -->
+  <training>
+    <!-- path: set path to training dataset -->
+    <path>/home/claudio/Datasets/CARLA/sequence_00</path>
+    <!-- location: select hardware to train on (CPU, GPU, Cluster) -->
+    <hardware>CPU</hardware>
+    <!-- mode: should the training be online or offline -->
+    <mode>offline</mode>
+  </training>
+
+</config>

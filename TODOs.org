@@ -65,23 +65,40 @@
 *** TODO add command line argument for static/dynamic world
 *** TODO add command line argument that allows for setting arbitrary sensor constellations using .JSON file
 * Dataset Preparation
-** reflect in which format the configuration should be supported
 ** parameters config-file should support
-*** TODO RGB/Grayscale
-*** TODO size of input images
-*** TODO sequence length
+*** DONE RGB/Grayscale
+    CLOSED: [2019-08-16 Fri 17:37]
+*** DONE size of input images
+    CLOSED: [2019-08-16 Fri 17:37]
+*** DONE sequence length
+    CLOSED: [2019-08-16 Fri 17:37]
 **** how many consecutive frames in time should be used per training data (e.g. use frames at t1, t2 and t3)
-*** TODO sequence width
+*** DONE sequence width
+    CLOSED: [2019-08-16 Fri 17:37]
 **** how many frames should be used per time (e.g. monocular, stereo, etc.)
-*** TODO labe selection
+*** DONE label selection
+    CLOSED: [2019-08-16 Fri 17:37]
 ****  if sequence width is greater than 2 the user needs to select between which frames the relative motion should be trained
-*** TODO preprocessing of input images
+*** DONE preprocessing of input images
+    CLOSED: [2019-08-16 Fri 17:37]
 **** offer presets of common filtering operations
 **** reflect ways on how to offer callback for more flexible usage
-*** TODO training location
+*** DONE training location
+    CLOSED: [2019-08-16 Fri 17:37]
 **** train on local CPU, local GPU or on cluster 
-*** TODO training mode
+*** DONE training mode
+    CLOSED: [2019-08-16 Fri 17:37]
 **** online or offline training
+** DONE implement config file parser
+   CLOSED: [2019-08-16 Fri 17:35]
+** DONE at the start of the script it should be checked if all relevant tags are defined in config file
+   CLOSED: [2019-08-16 Fri 17:36]
+*** relevant tags: input [images [format, width, height], length, frame [width], label [start, end]], training [path, location, mode]
+**** at least one frame must be specified
+** TODO make config overview looking nicer
+** TODO reflect in which format the configuration should be supported
+*** XML comes with great parser support
+*** but in order to support for flexible preprocessing via callback we need to come up with alternative config specification
 * CNN Implementation
 ** use Tensorflow 1, Tensorflow 2 or PyTorch ?
 * Dataset Analysis
