@@ -57,6 +57,7 @@
     CLOSED: [2019-08-16 Fri 09:11]
 *** DONE write roslaunch script to easily convert GT poses to bagfile
     CLOSED: [2019-08-16 Fri 09:11]
+*** TODO save another poses file named 'poses_nulled_6.txt' that keeps the poses in the form: [tx, ty, tz, roll, pitch, yaw]
 ** Low Priority
 *** TODO make display_sensors function more generic, s.t. arbitrary sensors (or selections from them) will be visualized
 *** TODO add random weather selection at start
