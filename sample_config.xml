@@ -28,6 +28,12 @@
       <!-- width: how many simultanous captured images of that frame should the model have as input (e.g. Mono=1, Stereo=2, ...) -->
       <width>1</width>
     </frame>
+    <!-- alternatively one can pass arbitrary (not necessarily CARLA) inputs by specifying the inputmap dictionary -->
+    <!--
+    <inputmap>
+      { '/home/claudio/Datasets/CARLA/sequence_02/rgb/left/images' : 'rgb_left', '/home/claudio/Datasets/CARLA/sequence_02/rgb/right/images' : 'rgb_right, '/home/claudio/Datasets/CARLA/sequence_02/depth/left/images' : 'depth_left', }
+    </inputmap>
+    -->
     <!-- label: select from which two images the relative pose should be infered -->
     <label>
       <start>1</start>
