@@ -242,7 +242,7 @@ def save_measurements_to_disk(sequence_id, measurements, base_path):
             measurement[0].save_to_disk(
                 base_path + "semantic_segmentation/" + sensor_position + "/" + filename + ".png", color_converter=carla.ColorConverter.CityScapesPalette)
         else:
-            # TODO make assert or something else that lets the program stop instead in this case of simple warning
+            # TODO make assert or something else that lets the program stop in this case instead of throwing a simple warning
             print("undefined sensor requested: ", measurement[1])
     # store left camera poses
     if gt_transform != None:
@@ -307,6 +307,8 @@ def save_measurements_to_disk(sequence_id, measurements, base_path):
         # write relative pose to disk
         with open(base_path + "relative_poses_nulled.txt", "a") as poses_file:
             poses_file.write(gt_pose_rel)
+
+        # TODO write 'relative_euler_poses_nulled.txt' to disk
 
     else:
         print("WARNING: No valid sensor attached for GT poses. Sensor needs to be attached left in order to get GT poses, else no poses are recorded.")
