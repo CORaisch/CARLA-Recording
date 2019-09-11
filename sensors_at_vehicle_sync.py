@@ -26,6 +26,7 @@ base_path = "raw/"
 T_0_inv = np.matrix((4,4))
 T_last = np.matrix((4,4))
 euler_last = [0.0, 0.0, 0.0]
+euler_0 = [0.0, 0.0, 0.0]
 timestamp_ref = None
 
 # NOTE taken from PythonAPI/examples/synchronous_mode.py
@@ -255,17 +256,24 @@ def save_measurements_to_disk(sequence_id, measurements, base_path):
         global T_0_inv
         global T_0_inv_2
         global T_last
+        global euler_0
         global euler_last
         if sequence_id == 0:
             ref_pose = gt_transform
             T_0 = numpy_mat_from_carla_transform(ref_pose)
             T_last = T_0.copy()
-            # write reference pose to config file -> in that way the absolute trajectory can be reconstructed afterwards
+            euler_0 = transform_angles_UE4_to_lefthanded(ref_pose)
+            euler_last = euler_0
+            # write reference pose to config file -> with that the absolute trajectory can be reconstructed afterwards
             ref_pose_str  = str(T_0[0,0]) + " " + str(T_0[0,1]) + " " + str(T_0[0,2]) + " " + str(T_0[0,3]) + " "
             ref_pose_str += str(T_0[1,0]) + " " + str(T_0[1,1]) + " " + str(T_0[1,2]) + " " + str(T_0[1,3]) + " "
             ref_pose_str += str(T_0[2,0]) + " " + str(T_0[2,1]) + " " + str(T_0[2,2]) + " " + str(T_0[2,3]) + "\n"
             with open(base_path + "config.txt", "a") as conf_file:
                 conf_file.write("initial absolute pose: {0}".format(ref_pose_str))
+            # write reference euler orientation to config file -> with that the absolute trajectory can be reconstructed afterwards
+            euler_0_str = str(euler_0[0]) + ', ' + str(euler_0[1]) + ' ' + str(euler_0[2]) + '\n'
+            with open(base_path + "config.txt", "a") as conf_file:
+                conf_file.write("initial euler orientation (roll, pitch, yaw): {0}".format(euler_0_str))
             # store inverse transform
             R = T_0[:3,:3]; t = T_0[:3, 3];
             T_0_inv = T_0.copy(); T_0_inv[:3,:3] = R.T; T_0_inv[:3, 3] = -R.T * t;
@@ -281,13 +289,14 @@ def save_measurements_to_disk(sequence_id, measurements, base_path):
         with open(base_path + "poses_nulled.txt", "a") as poses_file:
             poses_file.write(gt_pose_nulled)
 
+        # compute relative euler orientation relative to initial orientation
+        euler_i = transform_angles_UE4_to_lefthanded(gt_transform)
+        euler_nulled = [ euler_0[i] - euler_i[i] for i in range(3) ]
         # write 'euler_poses_nulled.txt' to disk
-        yaw, pitch, roll = transform_angles_UE4_to_lefthanded(gt_transform)
-        gt_euler_pose = str(T_i_nulled[0,3]) + " " + str(T_i_nulled[1,3]) + " " + str(T_i_nulled[2,3]) + " "
-        gt_euler_pose = str(roll) + " " + str(pitch) + " " + str(yaw) + "\n"
-
+        gt_euler_pose_nulled  = str(T_i_nulled[0,3]) + " " + str(T_i_nulled[1,3]) + " " + str(T_i_nulled[2,3]) + " "
+        gt_euler_pose_nulled += str(euler_nulled[0]) + " " + str(euler_nulled[1]) + " " + str(euler_nulled[2]) + "\n"
         with open(base_path + "euler_poses_nulled.txt", "a") as poses_file:
-            poses_file.write(gt_euler_pose)
+            poses_file.write(gt_euler_pose_nulled)
 
         # in order to shift the timestamps s.t. it starts at 0.0 sec we need to store the initial timestamp -> timestamp_ref
         global timestamp_ref
@@ -302,8 +311,7 @@ def save_measurements_to_disk(sequence_id, measurements, base_path):
         if sequence_id == 0:
             # relative pose at t[0] == T_0_nulled
             gt_pose_rel = gt_pose_nulled
-            gt_euler_pose_rel = gt_euler_pose
-            euler_last = [yaw, pitch, roll]
+            gt_euler_pose_rel = gt_euler_pose_nulled
         else:
             # compute inverse of T_last
             R_last = T_last[:3,:3]; t_last = T_last[:3, 3];
@@ -316,12 +324,12 @@ def save_measurements_to_disk(sequence_id, measurements, base_path):
             gt_pose_rel += str(T_rel[2,0]) + " " + str(T_rel[2,1]) + " " + str(T_rel[2,2]) + " " + str(T_rel[2,3]) + "\n"
             # update T_last
             T_last = T_i.copy()
-            # compute relative euler angles
-            rel_yaw = euler_last[0]-yaw; rel_pitch = euler_last[1]-pitch; rel_roll = euler_last[2]-roll;
-            gt_euler_pose_rel = str(T_i_nulled[0,3]) + " " + str(T_i_nulled[1,3]) + " " + str(T_i_nulled[2,3]) + " "
-            gt_euler_pose_rel = str(rel_roll) + " " + str(rel_pitch) + " " + str(rel_yaw) + "\n"
-            # update euler angles
-            euler_last = [yaw, pitch, roll]
+            # compute relative euler orientation
+            euler_rel = [ euler_last[i] - euler_i[i] for i in range(3) ]
+            gt_euler_pose_rel  = str(T_rel[0,3]) + " " + str(T_rel[1,3]) + " " + str(T_rel[2,3]) + " "
+            gt_euler_pose_rel += str(euler_rel[0]) + " " + str(euler_rel[1]) + " " + str(euler_rel[2]) + "\n"
+            # update euler orientation
+            euler_last = euler_i
 
         # write relative pose to disk
         with open(base_path + "relative_poses_nulled.txt", "a") as poses_file:
@@ -340,7 +348,7 @@ def transform_angles_UE4_to_lefthanded(transform):
     y = -transform.rotation.yaw   * math.pi / 180.0
     p = -transform.rotation.pitch * math.pi / 180.0
     r =  transform.rotation.roll  * math.pi / 180.0
-    return y, p, r
+    return [r, p, y]
 
 def numpy_mat_from_carla_transform(transform):
     def c(x):
