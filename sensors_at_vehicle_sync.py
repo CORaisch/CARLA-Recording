@@ -25,6 +25,7 @@ sequence_buffer = queue.Queue()
 base_path = "raw/"
 T_0_inv = np.matrix((4,4))
 T_last = np.matrix((4,4))
+euler_last = [0.0, 0.0, 0.0]
 timestamp_ref = None
 
 # NOTE taken from PythonAPI/examples/synchronous_mode.py
@@ -254,6 +255,7 @@ def save_measurements_to_disk(sequence_id, measurements, base_path):
         global T_0_inv
         global T_0_inv_2
         global T_last
+        global euler_last
         if sequence_id == 0:
             ref_pose = gt_transform
             T_0 = numpy_mat_from_carla_transform(ref_pose)
@@ -279,6 +281,14 @@ def save_measurements_to_disk(sequence_id, measurements, base_path):
         with open(base_path + "poses_nulled.txt", "a") as poses_file:
             poses_file.write(gt_pose_nulled)
 
+        # write 'euler_poses_nulled.txt' to disk
+        yaw, pitch, roll = transform_angles_UE4_to_lefthanded(gt_transform)
+        gt_euler_pose = str(T_i_nulled[0,3]) + " " + str(T_i_nulled[1,3]) + " " + str(T_i_nulled[2,3]) + " "
+        gt_euler_pose = str(roll) + " " + str(pitch) + " " + str(yaw) + "\n"
+
+        with open(base_path + "euler_poses_nulled.txt", "a") as poses_file:
+            poses_file.write(gt_euler_pose)
+
         # in order to shift the timestamps s.t. it starts at 0.0 sec we need to store the initial timestamp -> timestamp_ref
         global timestamp_ref
         if timestamp_ref == None:
@@ -292,6 +302,8 @@ def save_measurements_to_disk(sequence_id, measurements, base_path):
         if sequence_id == 0:
             # relative pose at t[0] == T_0_nulled
             gt_pose_rel = gt_pose_nulled
+            gt_euler_pose_rel = gt_euler_pose
+            euler_last = [yaw, pitch, roll]
         else:
             # compute inverse of T_last
             R_last = T_last[:3,:3]; t_last = T_last[:3, 3];
@@ -304,30 +316,43 @@ def save_measurements_to_disk(sequence_id, measurements, base_path):
             gt_pose_rel += str(T_rel[2,0]) + " " + str(T_rel[2,1]) + " " + str(T_rel[2,2]) + " " + str(T_rel[2,3]) + "\n"
             # update T_last
             T_last = T_i.copy()
+            # compute relative euler angles
+            rel_yaw = euler_last[0]-yaw; rel_pitch = euler_last[1]-pitch; rel_roll = euler_last[2]-roll;
+            gt_euler_pose_rel = str(T_i_nulled[0,3]) + " " + str(T_i_nulled[1,3]) + " " + str(T_i_nulled[2,3]) + " "
+            gt_euler_pose_rel = str(rel_roll) + " " + str(rel_pitch) + " " + str(rel_yaw) + "\n"
+            # update euler angles
+            euler_last = [yaw, pitch, roll]
+
         # write relative pose to disk
         with open(base_path + "relative_poses_nulled.txt", "a") as poses_file:
             poses_file.write(gt_pose_rel)
 
-        # TODO write 'relative_euler_poses_nulled.txt' to disk
+        # write 'relative_euler_poses_nulled.txt' to disk
+        with open(base_path + "relative_euler_poses_nulled.txt", "a") as poses_file:
+            poses_file.write(gt_euler_pose_rel)
 
     else:
         print("WARNING: No valid sensor attached for GT poses. Sensor needs to be attached left in order to get GT poses, else no poses are recorded.")
 
+def transform_angles_UE4_to_lefthanded(transform):
+    ## NOTE rotation angles given according to: https://carla.readthedocs.io/en/latest/python_api/#carla.Rotation
+    # transform angles to right handed coordinate system, note the rotation angle definitions in UE4 frame listed above
+    y = -transform.rotation.yaw   * math.pi / 180.0
+    p = -transform.rotation.pitch * math.pi / 180.0
+    r =  transform.rotation.roll  * math.pi / 180.0
+    return y, p, r
+
 def numpy_mat_from_carla_transform(transform):
-        def c(x):
-            return math.cos(x)
-        def s(x):
-            return math.sin(x)
-        ## NOTE rotation angles given according to: https://carla.readthedocs.io/en/latest/python_api/#carla.Rotation
-        # transform angles to right handed coordinate system, note the rotation angle definitions in UE4 frame listed above
-        y = -transform.rotation.yaw   * math.pi / 180.0
-        p = -transform.rotation.pitch * math.pi / 180.0
-        r =  transform.rotation.roll  * math.pi / 180.0
-        # using: http://planning.cs.uiuc.edu/node102.html -> gt_rotation = R_z(yaw)*R_y(pitch)*R_x(roll)
-        return np.matrix([[c(y)*c(p), c(y)*s(p)*s(r)-s(y)*c(r), c(y)*s(p)*c(r)+s(y)*s(r),  transform.location.x],
-                          [s(y)*c(p), s(y)*s(p)*s(r)+c(y)*c(r), s(y)*s(p)*c(r)-c(y)*s(r), -transform.location.y],
-                          [-s(p),     c(p)*s(r),                c(p)*c(r),                 transform.location.z],
-                          [0.0,       0.0,                      0.0,                       1.0                 ]])
+    def c(x):
+        return math.cos(x)
+    def s(x):
+        return math.sin(x)
+    y, p, r = transform_angles_UE4_to_lefthanded(transform)
+    # using: http://planning.cs.uiuc.edu/node102.html -> gt_rotation = R_z(yaw)*R_y(pitch)*R_x(roll)
+    return np.matrix([[c(y)*c(p), c(y)*s(p)*s(r)-s(y)*c(r), c(y)*s(p)*c(r)+s(y)*s(r),  transform.location.x],
+                      [s(y)*c(p), s(y)*s(p)*s(r)+c(y)*c(r), s(y)*s(p)*c(r)-c(y)*s(r), -transform.location.y],
+                      [-s(p),     c(p)*s(r),                c(p)*c(r),                 transform.location.z],
+                      [0.0,       0.0,                      0.0,                       1.0                 ]])
 
 def get_fov_from_fx(image_widht, fx):
     return (2.0 * math.atan(image_widht/(2.0*fx))) * 180.0 / math.pi # NOTE returns fov in deg
@@ -441,7 +466,7 @@ def main():
                 # push measurements into buffer TODO validate threadsafeness of queue.Queue
                 sequence_buffer.put(data[1:]) # don't push snapshot
 
-                ## beg DEBUG
+                ## beg DEBUG NOTE comment out this line when running on server
                 # time.sleep(0.5) # wait short ammount of time to give thread time NOTE comment this out when not on server
                 ## end DEBUG
 
