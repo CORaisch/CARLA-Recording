@@ -291,7 +291,7 @@ def save_measurements_to_disk(sequence_id, measurements, base_path):
 
         # compute relative euler orientation relative to initial orientation
         euler_i = transform_angles_UE4_to_lefthanded(gt_transform)
-        euler_nulled = [ euler_0[i] - euler_i[i] for i in range(3) ]
+        euler_nulled = [ euler_i[i] - euler_0[i] for i in range(3) ]
         # write 'euler_poses_nulled.txt' to disk
         gt_euler_pose_nulled  = str(T_i_nulled[0,3]) + " " + str(T_i_nulled[1,3]) + " " + str(T_i_nulled[2,3]) + " "
         gt_euler_pose_nulled += str(euler_nulled[0]) + " " + str(euler_nulled[1]) + " " + str(euler_nulled[2]) + "\n"
@@ -325,7 +325,7 @@ def save_measurements_to_disk(sequence_id, measurements, base_path):
             # update T_last
             T_last = T_i.copy()
             # compute relative euler orientation
-            euler_rel = [ euler_last[i] - euler_i[i] for i in range(3) ]
+            euler_rel = [ euler_i[i] - euler_last[i] for i in range(3) ]
             gt_euler_pose_rel  = str(T_rel[0,3]) + " " + str(T_rel[1,3]) + " " + str(T_rel[2,3]) + " "
             gt_euler_pose_rel += str(euler_rel[0]) + " " + str(euler_rel[1]) + " " + str(euler_rel[2]) + "\n"
             # update euler orientation
