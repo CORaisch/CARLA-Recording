@@ -355,7 +355,7 @@ def numpy_mat_from_carla_transform(transform):
         return math.cos(x)
     def s(x):
         return math.sin(x)
-    y, p, r = transform_angles_UE4_to_lefthanded(transform)
+    r, p, y = transform_angles_UE4_to_lefthanded(transform)
     # using: http://planning.cs.uiuc.edu/node102.html -> gt_rotation = R_z(yaw)*R_y(pitch)*R_x(roll)
     return np.matrix([[c(y)*c(p), c(y)*s(p)*s(r)-s(y)*c(r), c(y)*s(p)*c(r)+s(y)*s(r),  transform.location.x],
                       [s(y)*c(p), s(y)*s(p)*s(r)+c(y)*c(r), s(y)*s(p)*c(r)-c(y)*s(r), -transform.location.y],
