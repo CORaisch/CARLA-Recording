@@ -25,8 +25,6 @@ sequence_buffer = queue.Queue()
 base_path = "raw/"
 T_0_inv = np.matrix((4,4))
 T_last = np.matrix((4,4))
-euler_last = [0.0, 0.0, 0.0]
-euler_0 = [0.0, 0.0, 0.0]
 timestamp_ref = None
 
 # NOTE taken from PythonAPI/examples/synchronous_mode.py
@@ -256,14 +254,11 @@ def save_measurements_to_disk(sequence_id, measurements, base_path):
         global T_0_inv
         global T_0_inv_2
         global T_last
-        global euler_0
-        global euler_last
         if sequence_id == 0:
             ref_pose = gt_transform
             T_0 = numpy_mat_from_carla_transform(ref_pose)
             T_last = T_0.copy()
             euler_0 = transform_angles_UE4_to_lefthanded(ref_pose)
-            euler_last = euler_0
             # write reference pose to config file -> with that the absolute trajectory can be reconstructed afterwards
             ref_pose_str  = str(T_0[0,0]) + " " + str(T_0[0,1]) + " " + str(T_0[0,2]) + " " + str(T_0[0,3]) + " "
             ref_pose_str += str(T_0[1,0]) + " " + str(T_0[1,1]) + " " + str(T_0[1,2]) + " " + str(T_0[1,3]) + " "
@@ -274,12 +269,26 @@ def save_measurements_to_disk(sequence_id, measurements, base_path):
             euler_0_str = str(euler_0[0]) + ', ' + str(euler_0[1]) + ' ' + str(euler_0[2]) + '\n'
             with open(base_path + "config.txt", "a") as conf_file:
                 conf_file.write("initial euler orientation (roll, pitch, yaw): {0}".format(euler_0_str))
+            del euler_0
             # store inverse transform
             R = T_0[:3,:3]; t = T_0[:3, 3];
             T_0_inv = T_0.copy(); T_0_inv[:3,:3] = R.T; T_0_inv[:3, 3] = -R.T * t;
 
         # convert gt_transform to numpy matrix
         T_i = numpy_mat_from_carla_transform(gt_transform)
+
+        # NOTE check if euler angles could be extracted properly
+        dbg_euler_orig = transform_angles_UE4_to_lefthanded(gt_transform)
+        dbg_euler_new  = rot2euler(T_i[:3,:3])
+        diff = dbg_euler_orig - dbg_euler_new
+        assert((np.abs(np.array(diff)) < 1e-6).all())
+
+        ## beg DEBUG
+        print("diff: ", diff)
+        print("##############")
+        del dbg_euler_orig, dbg_euler_new, diff
+        ## end DEBUG
+
         # compute relative pose according to initial pose
         T_i_nulled = T_0_inv.copy() * T_i.copy()
         # write nulled pose to disk
@@ -290,8 +299,7 @@ def save_measurements_to_disk(sequence_id, measurements, base_path):
             poses_file.write(gt_pose_nulled)
 
         # compute relative euler orientation relative to initial orientation
-        euler_i = transform_angles_UE4_to_lefthanded(gt_transform)
-        euler_nulled = [ euler_0[i] - euler_i[i] for i in range(3) ]
+        euler_nulled = rot2euler(T_i_nulled[:3,:3])
         # write 'euler_poses_nulled.txt' to disk
         gt_euler_pose_nulled  = str(T_i_nulled[0,3]) + " " + str(T_i_nulled[1,3]) + " " + str(T_i_nulled[2,3]) + " "
         gt_euler_pose_nulled += str(euler_nulled[0]) + " " + str(euler_nulled[1]) + " " + str(euler_nulled[2]) + "\n"
@@ -325,11 +333,9 @@ def save_measurements_to_disk(sequence_id, measurements, base_path):
             # update T_last
             T_last = T_i.copy()
             # compute relative euler orientation
-            euler_rel = [ euler_last[i] - euler_i[i] for i in range(3) ]
+            euler_rel = rot2euler(T_rel[:3,:3])
             gt_euler_pose_rel  = str(T_rel[0,3]) + " " + str(T_rel[1,3]) + " " + str(T_rel[2,3]) + " "
             gt_euler_pose_rel += str(euler_rel[0]) + " " + str(euler_rel[1]) + " " + str(euler_rel[2]) + "\n"
-            # update euler orientation
-            euler_last = euler_i
 
         # write relative pose to disk
         with open(base_path + "relative_poses_nulled.txt", "a") as poses_file:
@@ -361,6 +367,20 @@ def numpy_mat_from_carla_transform(transform):
                       [s(y)*c(p), s(y)*s(p)*s(r)+c(y)*c(r), s(y)*s(p)*c(r)-c(y)*s(r), -transform.location.y],
                       [-s(p),     c(p)*s(r),                c(p)*c(r),                 transform.location.z],
                       [0.0,       0.0,                      0.0,                       1.0                 ]])
+
+def rot2euler(R):
+    # NOTE using: https://www.learnopencv.com/rotation-matrix-to-euler-angles/
+    sy = math.sqrt(R[0,0] * R[0,0] +  R[1,0] * R[1,0])
+    singular = sy < 1e-6
+    if  not singular :
+        x = math.atan2(R[2,1] , R[2,2])
+        y = math.atan2(-R[2,0], sy)
+        z = math.atan2(R[1,0], R[0,0])
+    else :
+        x = math.atan2(-R[1,2], R[1,1])
+        y = math.atan2(-R[2,0], sy)
+        z = 0.0
+    return np.array([x, y, z])
 
 def get_fov_from_fx(image_widht, fx):
     return (2.0 * math.atan(image_widht/(2.0*fx))) * 180.0 / math.pi # NOTE returns fov in deg
