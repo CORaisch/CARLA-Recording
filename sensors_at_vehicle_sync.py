@@ -283,11 +283,11 @@ def save_measurements_to_disk(sequence_id, measurements, base_path):
         diff = dbg_euler_orig - dbg_euler_new
         assert((np.abs(np.array(diff)) < 1e-6).all())
 
-        ## beg DEBUG
-        print("diff: ", diff)
-        print("##############")
-        del dbg_euler_orig, dbg_euler_new, diff
-        ## end DEBUG
+        # ## beg DEBUG
+        # print("diff: ", diff)
+        # print("##############")
+        # del dbg_euler_orig, dbg_euler_new, diff
+        # ## end DEBUG
 
         # compute relative pose according to initial pose
         T_i_nulled = T_0_inv.copy() * T_i.copy()
