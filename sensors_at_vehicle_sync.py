@@ -277,16 +277,27 @@ def save_measurements_to_disk(sequence_id, measurements, base_path):
         # convert gt_transform to numpy matrix
         T_i = numpy_mat_from_carla_transform(gt_transform)
 
+        # NOTE check if euler angles are in expected range: pitch must be in [-pi/2,pi/2] while roll and yaw must be in [-pi,pi]
+        euler_orig  = transform_angles_UE4_to_lefthanded(gt_transform)
+        if not (-math.pi <= euler_orig[0] <= math.pi and -math.pi/2.0 <= euler_orig[1] <= math.pi/2.0 and -math.pi <= euler_orig[2] <= math.pi):
+            print("[ERROR] one or more euler angles are not in expected range! This can lead to unexpected results especially when extracting the euler angles from the rotation matrices! Therefore the program will stop writing data from here on. If this case arrives you definitly should think about an alternative to extracting euler angles from rotation matrices, like e.g. using quaternions for the rotations.\ngiven euler angles (roll, pitch, yaw): {}\nNOTE roll and yaw must lie in [-pi,pi] while pitch must be in [-pi/2,pi/2]".format(euler_orig))
+            exit()
         # NOTE check if euler angles could be extracted properly
-        dbg_euler_orig = transform_angles_UE4_to_lefthanded(gt_transform)
-        dbg_euler_new  = rot2euler(T_i[:3,:3])
-        diff = dbg_euler_orig - dbg_euler_new
+        euler_extr = rot2euler(T_i[:3,:3])
+        diff       = euler_orig - euler_extr[0] # NOTE for now always pick first solution -> pitch angle of 2nd solution is always beyond +-90º (since p2=pi-p1) if cars pitch is in ]-pi/2, pi/2[ (which should always be the range of our data)
         assert((np.abs(np.array(diff)) < 1e-6).all())
 
         # ## beg DEBUG
         # print("diff: ", diff)
+        # print("correct solution:")
+        # print("roll: {}º ({} rad) | pitch: {}º ({} rad) | yaw: {}º ({} rad)".format(euler_orig[0]*180.0/math.pi, euler_orig[0], euler_orig[1]*180.0/math.pi, euler_orig[1], euler_orig[2]*180.0/math.pi, euler_orig[2]))
+        # print("1st solution:")
+        # print("roll: {}º ({} rad) | pitch: {}º ({} rad) | yaw: {}º ({} rad)".format(euler_extr[0][0]*180.0/math.pi, euler_extr[0][0], euler_extr[0][1]*180.0/math.pi, euler_extr[0][1], euler_extr[0][2]*180.0/math.pi, euler_extr[0][2]))
+        # if euler_extr.shape[0]==2:
+        #     print("2nd solution:")
+        #     print("roll: {}º ({} rad) | pitch: {}º ({} rad) | yaw: {}º ({} rad)".format(euler_extr[1][0]*180.0/math.pi, euler_extr[1][0], euler_extr[1][1]*180.0/math.pi, euler_extr[1][1], euler_extr[1][2]*180.0/math.pi, euler_extr[1][2]))
         # print("##############")
-        # del dbg_euler_orig, dbg_euler_new, diff
+        # # del euler_orig, euler_extr, diff
         # ## end DEBUG
 
         # compute relative pose according to initial pose
@@ -299,7 +310,7 @@ def save_measurements_to_disk(sequence_id, measurements, base_path):
             poses_file.write(gt_pose_nulled)
 
         # compute relative euler orientation relative to initial orientation
-        euler_nulled = rot2euler(T_i_nulled[:3,:3])
+        euler_nulled = rot2euler(T_i_nulled[:3,:3])[0] # NOTE for now always pick first solution -> pitch angle of 2nd solution is always beyond +-90º (since p2=pi-p1) if cars pitch is in ]-pi/2, pi/2[ (which should always be the range of our data)
         # write 'euler_poses_nulled.txt' to disk
         gt_euler_pose_nulled  = str(T_i_nulled[0,3]) + " " + str(T_i_nulled[1,3]) + " " + str(T_i_nulled[2,3]) + " "
         gt_euler_pose_nulled += str(euler_nulled[0]) + " " + str(euler_nulled[1]) + " " + str(euler_nulled[2]) + "\n"
@@ -333,7 +344,7 @@ def save_measurements_to_disk(sequence_id, measurements, base_path):
             # update T_last
             T_last = T_i.copy()
             # compute relative euler orientation
-            euler_rel = rot2euler(T_rel[:3,:3])
+            euler_rel = rot2euler(T_rel[:3,:3])[0] # NOTE for now always pick first solution -> pitch angle of 2nd solution is always beyond +-90º (since p2=pi-p1) if cars pitch is in ]-pi/2, pi/2[ (which should always be the range of our data)
             gt_euler_pose_rel  = str(T_rel[0,3]) + " " + str(T_rel[1,3]) + " " + str(T_rel[2,3]) + " "
             gt_euler_pose_rel += str(euler_rel[0]) + " " + str(euler_rel[1]) + " " + str(euler_rel[2]) + "\n"
 
@@ -368,19 +379,35 @@ def numpy_mat_from_carla_transform(transform):
                       [-s(p),     c(p)*s(r),                c(p)*c(r),                 transform.location.z],
                       [0.0,       0.0,                      0.0,                       1.0                 ]])
 
+# TODO extend rot2euler s.t. it additionally takes the previous set of euler angles to safely determine the correct solution
+# NOTE theory from: http://www.gregslabaugh.net/publications/euler.pdf
+# NOTE function will either return 2 solutions in the regular case or in the very rare gimbal case 1 sample solution from infinity many solutions
 def rot2euler(R):
-    # NOTE using: https://www.learnopencv.com/rotation-matrix-to-euler-angles/
-    sy = math.sqrt(R[0,0] * R[0,0] +  R[1,0] * R[1,0])
-    singular = sy < 1e-6
-    if  not singular :
-        x = math.atan2(R[2,1] , R[2,2])
-        y = math.atan2(-R[2,0], sy)
-        z = math.atan2(R[1,0], R[0,0])
-    else :
-        x = math.atan2(-R[1,2], R[1,1])
-        y = math.atan2(-R[2,0], sy)
-        z = 0.0
-    return np.array([x, y, z])
+    if abs(R[2,0]) < 0.999998:
+        # NOTE case: R20 != +-1 => pitch != 90º
+        pitch1 = -math.asin(R[2,0])
+        pitch2 = math.pi - pitch1
+        roll1  = math.atan2(R[2,1]/math.cos(pitch1), R[2,2]/math.cos(pitch1))
+        roll2  = math.atan2(R[2,1]/math.cos(pitch2), R[2,2]/math.cos(pitch2))
+        yaw1   = math.atan2(R[1,0]/math.cos(pitch1), R[0,0]/math.cos(pitch1))
+        yaw2   = math.atan2(R[1,0]/math.cos(pitch2), R[0,0]/math.cos(pitch2))
+        # return the two remaining possible solutions
+        return np.array([[roll1, pitch1, yaw1], [roll2, pitch2, yaw2]])
+    else: # NOTE that case should not occur on our data
+        print("Gimbal Lock Case!!\nTODO extend rot2euler function using prev. euler angles to determine best solution!")
+        # NOTE case: Gimbal Lock since pitch==+-90º -> there are infinity many solutions !
+        yaw = 0.0 # pick yaw arbitrary, since it is linked to roll
+        # NOTE R20 can either be -1 or 1 in this case
+        if (R[2,0] + 1.0) < 1e-6:
+            # NOTE case: R20==-1
+            pitch = math.pi/2.0
+            roll  = yaw + math.atan2(R[0,1], R[0,2])
+        else:
+            # NOTE case: R20==1
+            pitch = -math.pi/2.0
+            roll  = -yaw + math.atan2(-R[0,1], -R[0,2])
+        # return one sample solution in the gimbal lock case
+        return np.array([[roll, pitch, yaw]])
 
 def get_fov_from_fx(image_widht, fx):
     return (2.0 * math.atan(image_widht/(2.0*fx))) * 180.0 / math.pi # NOTE returns fov in deg
