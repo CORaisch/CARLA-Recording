@@ -29,12 +29,11 @@ def main():
     print("{0} relative poses have been parsed".format(len(poses_np)))
 
     # iterate relative poses and concatenate absolute pose for each frame
-    T_last = poses_np.pop(0).copy()
-    abs_poses_str = mat_to_string(T_last)
+    T = poses_np.pop(0).copy()
+    abs_poses_str = mat_to_string(T)
     for pose in poses_np:
-        T_i = T_last * pose
-        abs_poses_str += mat_to_string(T_i)
-        T_last = T_i.copy()
+        T = T * pose
+        abs_poses_str += mat_to_string(T)
 
     # write absolute poses to file
     filename_out = filename.replace('.txt', '_converted.txt')
