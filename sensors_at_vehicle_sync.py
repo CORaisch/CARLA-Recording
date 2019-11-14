@@ -372,11 +372,13 @@ def numpy_mat_from_carla_transform(transform):
         return math.cos(x)
     def s(x):
         return math.sin(x)
-    r, p, y = transform_angles_UE4_to_lefthanded(transform)
+    ue_r, ue_p, ue_y = transform_angles_UE4_to_lefthanded(transform)
+    # convert to right handed KITTI coordinate frame
+    r = ue_p; p = -ue_y; y = ue_r;
     # using: http://planning.cs.uiuc.edu/node102.html -> gt_rotation = R_z(yaw)*R_y(pitch)*R_x(roll)
-    return np.matrix([[c(y)*c(p), c(y)*s(p)*s(r)-s(y)*c(r), c(y)*s(p)*c(r)+s(y)*s(r),  transform.location.x],
-                      [s(y)*c(p), s(y)*s(p)*s(r)+c(y)*c(r), s(y)*s(p)*c(r)-c(y)*s(r), -transform.location.y],
-                      [-s(p),     c(p)*s(r),                c(p)*c(r),                 transform.location.z],
+    return np.matrix([[c(y)*c(p), c(y)*s(p)*s(r)-s(y)*c(r), c(y)*s(p)*c(r)+s(y)*s(r),  transform.location.y],
+                      [s(y)*c(p), s(y)*s(p)*s(r)+c(y)*c(r), s(y)*s(p)*c(r)-c(y)*s(r), -transform.location.z],
+                      [-s(p),     c(p)*s(r),                c(p)*c(r),                 transform.location.x],
                       [0.0,       0.0,                      0.0,                       1.0                 ]])
 
 # TODO extend rot2euler s.t. it additionally takes the previous set of euler angles to safely determine the correct solution
