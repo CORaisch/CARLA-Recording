@@ -65,10 +65,10 @@ def main():
         t_c = t_k.copy()
         t_c[0,0] = t_k[2,0]; t_c[1,0] = -t_k[0,0]; t_c[2,0] = -t_k[1,0];
         ## convert rotation
-        # define R kitti to carla: 1) rotate 90º about world (carla) y axis, 2) rotate -90º about world(carla) x axis
-        R_k_to_c = R_x(-math.pi/2.0) * R_y(math.pi/2.0)
+        # define R carla to kitti: 1) rotate 90º about world (carla) y axis, 2) rotate -90º about world(carla) x axis
+        R_c_to_k = R_x(-math.pi/2.0) * R_y(math.pi/2.0)
         # transform kitti rotations into carla coordinate system
-        R_c = R_k_to_c * R_k * R_k_to_c.T
+        R_c = R_c_to_k * R_k * R_c_to_k.T
         # compose final pose
         T_c = pose.copy(); T_c[:3,:3] = R_c; T_c[:3,3] = t_c;
         poses_str += mat_to_string(T_c)
