@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# sample call: python convert_kitti_to_carla.py --poses /media/claudio/1AC5-C2D4/Datasets/KITTI/gt_poses/10.txt
 
 import sys, math
 import argparse
