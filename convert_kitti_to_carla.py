@@ -42,7 +42,7 @@ def R_z(a):
 
 def main():
     # setup argparser
-    argparser = argparse.ArgumentParser(description="Converts poses from the coordinate system of KITTI to CARLA.")
+    argparser = argparse.ArgumentParser(description="Converts poses from KITTI coordinate system to CARLA.")
     argparser.add_argument('--poses', '-p', type=str, help="path to poses")
     args = argparser.parse_args()
 
