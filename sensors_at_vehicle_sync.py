@@ -217,7 +217,7 @@ def write_config_to_disk(args):
 
 def save_measurements_to_disk(sequence_id, measurements, base_path):
     # prepare paths
-    filename  = "images/" + str(sequence_id).zfill(10)
+    filename  = str(sequence_id).zfill(6)
     # iterate sensors and store their outputs into appropriate directory
     gt_transform = None; gt_timestamp = 0.0;
     for measurement in measurements:
@@ -232,18 +232,18 @@ def save_measurements_to_disk(sequence_id, measurements, base_path):
             if gt_transform == None and sensor_position == 'left':
                 gt_transform = measurement[0].transform
                 gt_timestamp = measurement[0].timestamp
-            # TODO logarithmic depth only for debugging, later save as raw !!
-            measurement[0].save_to_disk(base_path + "depth/" + sensor_position + "/" + filename + ".png", color_converter=carla.ColorConverter.LogarithmicDepth)
+            # NOTE use colorConverter.LogarithmicDepth for visualization
+            measurement[0].save_to_disk(base_path + "depth/" + sensor_position + "/" + filename + ".png")
         elif sensor_type == 'sensor.camera.semantic_segmentation':
             if gt_transform == None and sensor_position == 'left':
                 gt_transform = measurement[0].transform
                 gt_timestamp = measurement[0].timestamp
-            # TODO cityscapes palette only for debugging, later save as raw !!
-            measurement[0].save_to_disk(
-                base_path + "semantic_segmentation/" + sensor_position + "/" + filename + ".png", color_converter=carla.ColorConverter.CityScapesPalette)
+            # use colorConverter.CityScapesPalette for visualization
+            measurement[0].save_to_disk(base_path + "semantic_segmentation/" + sensor_position + "/" + filename + ".png")
         else:
-            # TODO make assert or something else that lets the program stop in this case instead of throwing a simple warning
+            # shouldn't end up here!
             print("undefined sensor requested: ", measurement[1])
+            exit()
     # store left camera poses
     if gt_transform != None:
         def c(x):
@@ -258,18 +258,12 @@ def save_measurements_to_disk(sequence_id, measurements, base_path):
             ref_pose = gt_transform
             T_0 = numpy_mat_from_carla_transform(ref_pose)
             T_last = T_0.copy()
-            euler_0 = transform_angles_UE4_to_lefthanded(ref_pose)
-            # write reference pose to config file -> with that the absolute trajectory can be reconstructed afterwards
+            # write reference pose to config file so the CARLA world-frame trajectory can be reconstructed afterwards
             ref_pose_str  = str(T_0[0,0]) + " " + str(T_0[0,1]) + " " + str(T_0[0,2]) + " " + str(T_0[0,3]) + " "
             ref_pose_str += str(T_0[1,0]) + " " + str(T_0[1,1]) + " " + str(T_0[1,2]) + " " + str(T_0[1,3]) + " "
             ref_pose_str += str(T_0[2,0]) + " " + str(T_0[2,1]) + " " + str(T_0[2,2]) + " " + str(T_0[2,3]) + "\n"
             with open(base_path + "config.txt", "a") as conf_file:
-                conf_file.write("initial absolute pose: {0}".format(ref_pose_str))
-            # write reference euler orientation to config file -> with that the absolute trajectory can be reconstructed afterwards
-            euler_0_str = str(euler_0[0]) + ', ' + str(euler_0[1]) + ' ' + str(euler_0[2]) + '\n'
-            with open(base_path + "config.txt", "a") as conf_file:
-                conf_file.write("initial euler orientation (roll, pitch, yaw): {0}".format(euler_0_str))
-            del euler_0
+                conf_file.write("initial absolute pose: {}".format(ref_pose_str))
             # store inverse transform
             R = T_0[:3,:3]; t = T_0[:3, 3];
             T_0_inv = T_0.copy(); T_0_inv[:3,:3] = R.T; T_0_inv[:3, 3] = -R.T * t;
@@ -277,45 +271,14 @@ def save_measurements_to_disk(sequence_id, measurements, base_path):
         # convert gt_transform to numpy matrix
         T_i = numpy_mat_from_carla_transform(gt_transform)
 
-        # NOTE check if euler angles are in expected range: pitch must be in [-pi/2,pi/2] while roll and yaw must be in [-pi,pi]
-        euler_orig  = transform_angles_UE4_to_lefthanded(gt_transform)
-        if not (-math.pi <= euler_orig[0] <= math.pi and -math.pi/2.0 <= euler_orig[1] <= math.pi/2.0 and -math.pi <= euler_orig[2] <= math.pi):
-            print("[ERROR] one or more euler angles are not in expected range! This can lead to unexpected results especially when extracting the euler angles from the rotation matrices! Therefore the program will stop writing data from here on. If this case arrives you definitly should think about an alternative to extracting euler angles from rotation matrices, like e.g. using quaternions for the rotations.\ngiven euler angles (roll, pitch, yaw): {}\nNOTE roll and yaw must lie in [-pi,pi] while pitch must be in [-pi/2,pi/2]".format(euler_orig))
-            exit()
-        # NOTE check if euler angles could be extracted properly
-        euler_extr = rot2euler(T_i[:3,:3])
-        diff       = euler_orig - euler_extr[0] # NOTE for now always pick first solution -> pitch angle of 2nd solution is always beyond +-90º (since p2=pi-p1) if cars pitch is in ]-pi/2, pi/2[ (which should always be the range of our data)
-        assert((np.abs(np.array(diff)) < 1e-6).all())
-
-        # ## beg DEBUG
-        # print("diff: ", diff)
-        # print("correct solution:")
-        # print("roll: {}º ({} rad) | pitch: {}º ({} rad) | yaw: {}º ({} rad)".format(euler_orig[0]*180.0/math.pi, euler_orig[0], euler_orig[1]*180.0/math.pi, euler_orig[1], euler_orig[2]*180.0/math.pi, euler_orig[2]))
-        # print("1st solution:")
-        # print("roll: {}º ({} rad) | pitch: {}º ({} rad) | yaw: {}º ({} rad)".format(euler_extr[0][0]*180.0/math.pi, euler_extr[0][0], euler_extr[0][1]*180.0/math.pi, euler_extr[0][1], euler_extr[0][2]*180.0/math.pi, euler_extr[0][2]))
-        # if euler_extr.shape[0]==2:
-        #     print("2nd solution:")
-        #     print("roll: {}º ({} rad) | pitch: {}º ({} rad) | yaw: {}º ({} rad)".format(euler_extr[1][0]*180.0/math.pi, euler_extr[1][0], euler_extr[1][1]*180.0/math.pi, euler_extr[1][1], euler_extr[1][2]*180.0/math.pi, euler_extr[1][2]))
-        # print("##############")
-        # # del euler_orig, euler_extr, diff
-        # ## end DEBUG
-
-        # compute relative pose according to initial pose
+        # compute relative pose according to initial pose so that recorded trajectory always start at origin aligned with world-frame
         T_i_nulled = T_0_inv.copy() * T_i.copy()
         # write nulled pose to disk
         gt_pose_nulled  = str(T_i_nulled[0,0]) + " " + str(T_i_nulled[0,1]) + " " + str(T_i_nulled[0,2]) + " " + str(T_i_nulled[0,3]) + " "
         gt_pose_nulled += str(T_i_nulled[1,0]) + " " + str(T_i_nulled[1,1]) + " " + str(T_i_nulled[1,2]) + " " + str(T_i_nulled[1,3]) + " "
         gt_pose_nulled += str(T_i_nulled[2,0]) + " " + str(T_i_nulled[2,1]) + " " + str(T_i_nulled[2,2]) + " " + str(T_i_nulled[2,3]) + "\n"
-        with open(base_path + "poses_nulled.txt", "a") as poses_file:
+        with open(base_path + "poses.txt", "a") as poses_file:
             poses_file.write(gt_pose_nulled)
-
-        # compute relative euler orientation relative to initial orientation
-        euler_nulled = rot2euler(T_i_nulled[:3,:3])[0] # NOTE for now always pick first solution -> pitch angle of 2nd solution is always beyond +-90º (since p2=pi-p1) if cars pitch is in ]-pi/2, pi/2[ (which should always be the range of our data)
-        # write 'euler_poses_nulled.txt' to disk
-        gt_euler_pose_nulled  = str(T_i_nulled[0,3]) + " " + str(T_i_nulled[1,3]) + " " + str(T_i_nulled[2,3]) + " "
-        gt_euler_pose_nulled += str(euler_nulled[0]) + " " + str(euler_nulled[1]) + " " + str(euler_nulled[2]) + "\n"
-        with open(base_path + "euler_poses_nulled.txt", "a") as poses_file:
-            poses_file.write(gt_euler_pose_nulled)
 
         # in order to shift the timestamps s.t. it starts at 0.0 sec we need to store the initial timestamp -> timestamp_ref
         global timestamp_ref
@@ -325,41 +288,10 @@ def save_measurements_to_disk(sequence_id, measurements, base_path):
         with open(base_path + "timestamps.txt", "a") as stamps_file:
             stamps_file.write(str(gt_timestamp-timestamp_ref) + "\n")
 
-        # save relative pose
-        gt_pose_rel = ""
-        if sequence_id == 0:
-            # relative pose at t[0] == T_0_nulled
-            gt_pose_rel = gt_pose_nulled
-            gt_euler_pose_rel = gt_euler_pose_nulled
-        else:
-            # compute inverse of T_last
-            R_last = T_last[:3,:3]; t_last = T_last[:3, 3];
-            T_last_inv = T_last.copy(); T_last_inv[:3,:3] = R_last.T; T_last_inv[:3, 3] = -R_last.T * t_last;
-            # compute relative pose from t[i-1] to t[i]
-            T_rel = T_last_inv * T_i
-            # compose string
-            gt_pose_rel  = str(T_rel[0,0]) + " " + str(T_rel[0,1]) + " " + str(T_rel[0,2]) + " " + str(T_rel[0,3]) + " "
-            gt_pose_rel += str(T_rel[1,0]) + " " + str(T_rel[1,1]) + " " + str(T_rel[1,2]) + " " + str(T_rel[1,3]) + " "
-            gt_pose_rel += str(T_rel[2,0]) + " " + str(T_rel[2,1]) + " " + str(T_rel[2,2]) + " " + str(T_rel[2,3]) + "\n"
-            # update T_last
-            T_last = T_i.copy()
-            # compute relative euler orientation
-            euler_rel = rot2euler(T_rel[:3,:3])[0] # NOTE for now always pick first solution -> pitch angle of 2nd solution is always beyond +-90º (since p2=pi-p1) if cars pitch is in ]-pi/2, pi/2[ (which should always be the range of our data)
-            gt_euler_pose_rel  = str(T_rel[0,3]) + " " + str(T_rel[1,3]) + " " + str(T_rel[2,3]) + " "
-            gt_euler_pose_rel += str(euler_rel[0]) + " " + str(euler_rel[1]) + " " + str(euler_rel[2]) + "\n"
-
-        # write relative pose to disk
-        with open(base_path + "relative_poses_nulled.txt", "a") as poses_file:
-            poses_file.write(gt_pose_rel)
-
-        # write 'relative_euler_poses_nulled.txt' to disk
-        with open(base_path + "relative_euler_poses_nulled.txt", "a") as poses_file:
-            poses_file.write(gt_euler_pose_rel)
-
     else:
         print("WARNING: No valid sensor attached for GT poses. Sensor needs to be attached left in order to get GT poses, else no poses are recorded.")
 
-def transform_angles_UE4_to_lefthanded(transform):
+def transform_angles_UE4_to_righthanded(transform):
     ## NOTE rotation angles given according to: https://carla.readthedocs.io/en/latest/python_api/#carla.Rotation
     # transform angles to right handed coordinate system, note the rotation angle definitions in UE4 frame listed above
     y = -transform.rotation.yaw   * math.pi / 180.0
@@ -372,44 +304,18 @@ def numpy_mat_from_carla_transform(transform):
         return math.cos(x)
     def s(x):
         return math.sin(x)
-    ue_r, ue_p, ue_y = transform_angles_UE4_to_lefthanded(transform)
+    ue_r, ue_p, ue_y = transform_angles_UE4_to_righthanded(transform)
     # convert to right handed KITTI coordinate frame
-    r = ue_p; p = -ue_y; y = ue_r;
     # using: http://planning.cs.uiuc.edu/node102.html -> gt_rotation = R_z(yaw)*R_y(pitch)*R_x(roll)
+    r = -ue_p; p = -ue_y; y = ue_r;
     return np.matrix([[c(y)*c(p), c(y)*s(p)*s(r)-s(y)*c(r), c(y)*s(p)*c(r)+s(y)*s(r),  transform.location.y],
                       [s(y)*c(p), s(y)*s(p)*s(r)+c(y)*c(r), s(y)*s(p)*c(r)-c(y)*s(r), -transform.location.z],
                       [-s(p),     c(p)*s(r),                c(p)*c(r),                 transform.location.x],
                       [0.0,       0.0,                      0.0,                       1.0                 ]])
-
-# TODO extend rot2euler s.t. it additionally takes the previous set of euler angles to safely determine the correct solution
-# NOTE theory from: http://www.gregslabaugh.net/publications/euler.pdf
-# NOTE function will either return 2 solutions in the regular case or in the very rare gimbal case 1 sample solution from infinity many solutions
-def rot2euler(R):
-    if abs(R[2,0]) < 0.999998:
-        # NOTE case: R20 != +-1 => pitch != 90º
-        pitch1 = -math.asin(R[2,0])
-        pitch2 = math.pi - pitch1
-        roll1  = math.atan2(R[2,1]/math.cos(pitch1), R[2,2]/math.cos(pitch1))
-        roll2  = math.atan2(R[2,1]/math.cos(pitch2), R[2,2]/math.cos(pitch2))
-        yaw1   = math.atan2(R[1,0]/math.cos(pitch1), R[0,0]/math.cos(pitch1))
-        yaw2   = math.atan2(R[1,0]/math.cos(pitch2), R[0,0]/math.cos(pitch2))
-        # return the two remaining possible solutions
-        return np.array([[roll1, pitch1, yaw1], [roll2, pitch2, yaw2]])
-    else: # NOTE that case should not occur on our data
-        print("Gimbal Lock Case!!\nTODO extend rot2euler function using prev. euler angles to determine best solution!")
-        # NOTE case: Gimbal Lock since pitch==+-90º -> there are infinity many solutions !
-        yaw = 0.0 # pick yaw arbitrary, since it is linked to roll
-        # NOTE R20 can either be -1 or 1 in this case
-        if (R[2,0] + 1.0) < 1e-6:
-            # NOTE case: R20==-1
-            pitch = math.pi/2.0
-            roll  = yaw + math.atan2(R[0,1], R[0,2])
-        else:
-            # NOTE case: R20==1
-            pitch = -math.pi/2.0
-            roll  = -yaw + math.atan2(-R[0,1], -R[0,2])
-        # return one sample solution in the gimbal lock case
-        return np.array([[roll, pitch, yaw]])
+    # return np.matrix([[c(y)*c(p), c(y)*s(p)*s(r)-s(y)*c(r), c(y)*s(p)*c(r)+s(y)*s(r),  transform.location.x],
+    #                   [s(y)*c(p), s(y)*s(p)*s(r)+c(y)*c(r), s(y)*s(p)*c(r)-c(y)*s(r), -transform.location.y],
+    #                   [-s(p),     c(p)*s(r),                c(p)*c(r),                 transform.location.z],
+    #                   [0.0,       0.0,                      0.0,                       1.0                 ]])
 
 def get_fov_from_fx(image_widht, fx):
     return (2.0 * math.atan(image_widht/(2.0*fx))) * 180.0 / math.pi # NOTE returns fov in deg
@@ -457,10 +363,14 @@ def main():
     try:
         # set random spawning location of sensor carrying vehicle
         m = world.get_map()
-        start_pose = random.choice(m.get_spawn_points())
+        # start_pose = random.choice(m.get_spawn_points())
+        # beg DEBUG
+        # force vehicle to spawn near slope -> used for checking if all rotations work correctly
+        start_pose = carla.Transform(carla.Location(150.51410675048828, -78.61235046386719, 8.932514190673828), carla.Rotation(0.0, 90.0, 0.0))
+        # end DEBUG
 
         ## setup world properties
-        # set traffic light timings
+        # set traffic light timings FIXME almost no effect -> kick it?
         d_red, d_yellow, d_green = args.traffic_light_timings
         for traffic_light in world.get_actors().filter('traffic.traffic_light'):
             traffic_light.set_red_time(d_red)
@@ -477,6 +387,7 @@ def main():
         # spawn vehicle to which sensors should be attached
         car_blueprints = [x for x in world.get_blueprint_library().filter('vehicle.*') if int(x.get_attribute('number_of_wheels')) == 4]
         vehicle = world.spawn_actor(random.choice(car_blueprints), start_pose)
+
         actor_list.append(vehicle)
         vehicle.set_simulate_physics(True)
         vehicle.set_autopilot(True)
@@ -523,7 +434,7 @@ def main():
                 # push measurements into buffer TODO validate threadsafeness of queue.Queue
                 sequence_buffer.put(data[1:]) # don't push snapshot
 
-                ## beg DEBUG NOTE comment out this line when running on server
+                ## beg DEBUG
                 # time.sleep(0.5) # wait short ammount of time to give thread time NOTE comment this out when not on server
                 ## end DEBUG
 
