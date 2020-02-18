@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/home/claudio/Apps/anaconda3/bin/python
 
 # Copyright (c) 2019 Computer Vision Center (CVC) at the Universitat Autonoma de
 # Barcelona (UAB).
@@ -363,11 +363,12 @@ def main():
     try:
         # set random spawning location of sensor carrying vehicle
         m = world.get_map()
-        # start_pose = random.choice(m.get_spawn_points())
-        # beg DEBUG
-        # force vehicle to spawn near slope -> used for checking if all rotations work correctly
-        start_pose = carla.Transform(carla.Location(150.51410675048828, -78.61235046386719, 8.932514190673828), carla.Rotation(0.0, 90.0, 0.0))
-        # end DEBUG
+        start_pose = random.choice(m.get_spawn_points())
+
+        # # beg DEBUG
+        # # force vehicle to spawn near slope -> used for checking if all rotations work correctly
+        # start_pose = carla.Transform(carla.Location(150.51410675048828, -78.61235046386719, 8.932514190673828), carla.Rotation(0.0, 90.0, 0.0))
+        # # end DEBUG
 
         ## setup world properties
         # set traffic light timings FIXME almost no effect -> kick it?
