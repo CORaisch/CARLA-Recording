@@ -336,6 +336,7 @@ def main():
     argparser.add_argument('--fps', '-fps', type=float, default=10.0, help="set captuing rate of sensors (WARNING don't set value below 10 fps, its not yet supported by CARLA)")
     argparser.add_argument('--base_path', '-base_path', type=str, default="raw/", help="set base directory where recorded sequences will be stored")
     argparser.add_argument('--traffic_light_timings', '-traffic_light_timings', type=float, default=[1.0, 0.5, 2.0], nargs=3, help="set duration in seconds for how long traffic lights are on (format: R Y G)")
+    argparser.add_argument('--world', '-world', type=str, default=None, help="set world to load on server")
     # finally parse arguments
     args = argparser.parse_args()
 
@@ -356,7 +357,10 @@ def main():
     client = carla.Client('134.2.178.201', 2000)
     client.set_timeout(10.0)
 
-    world = client.get_world()
+    if args.world: # if given load world from arg
+        world = client.load_world(args.world)
+    else: # else take world thats already running on server
+        world = client.get_world()
 
     settings_w = world.get_settings()
 
