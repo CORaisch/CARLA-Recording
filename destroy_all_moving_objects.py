@@ -1,3 +1,5 @@
+#!/home/claudio/Apps/anaconda3/bin/python
+
 import carla
 
 def main():

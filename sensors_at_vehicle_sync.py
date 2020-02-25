@@ -427,6 +427,7 @@ def main():
         with CarlaSyncMode(world, sensor_list, fps=args.fps) as sync_mode:
             # start disk writer thread
             disk_writer_thread.start()
+            number_data_buffered  = 0
             while True:
                 if should_quit():
                     return
@@ -438,9 +439,10 @@ def main():
                 ## save data to disk
                 # push measurements into buffer TODO validate threadsafeness of queue.Queue
                 sequence_buffer.put(data[1:]) # don't push snapshot
+                number_data_buffered += 1
 
                 ## beg DEBUG
-                # time.sleep(0.5) # wait short ammount of time to give thread time NOTE comment this out when not on server
+                time.sleep(0.5) # wait short ammount of time to give thread time NOTE comment this out when not on server
                 ## end DEBUG
 
                 ## compute simulated fps (for verification)
@@ -458,6 +460,9 @@ def main():
                 display.blit(font.render('% 5d FPS (real)' % clock.get_fps(), True, (255, 255, 255)), (8, 10))
                 display.blit(font.render('% 5d FPS (simulated sensor capturing rate)' % fps, True, (255, 255, 255)), (8, 28))
                 pygame.display.flip()
+
+                # print progress
+                print('#buffered measurements: {}'.format(number_data_buffered), end='\r')
 
     finally:
         # stop and wait for disk writer thread
