@@ -22,6 +22,7 @@ import time
 ## globals
 is_running = True
 sequence_buffer = queue.Queue()
+sequence_id = 0
 base_path = "raw/"
 T_0_inv = np.matrix((4,4))
 T_last = np.matrix((4,4))
@@ -176,7 +177,7 @@ def disk_writer_loop():
     global is_running
     global sequence_buffer
     global base_path
-    sequence_id = 0
+    global sequence_id
     while is_running:
         while sequence_buffer.qsize():
             if not is_running:
@@ -462,7 +463,7 @@ def main():
                 pygame.display.flip()
 
                 # print progress
-                print('#buffered measurements: {}'.format(number_data_buffered), end='\r')
+                print('#buffered/#written measurements: {}/{}'.format(number_data_buffered, sequence_id), end='\r')
 
     finally:
         # stop and wait for disk writer thread
