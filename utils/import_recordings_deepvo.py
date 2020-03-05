@@ -99,8 +99,8 @@ for i, src in enumerate(srcs):
 
     # check if src is remote
     if args.host: # case: download files from remote machine
-        print("import sequence from '{}:{}' to '{}' at index {}:".format(args.host, src, args.dst, idcs[i]))
+        print("import sequence '{}:{}' to '{}' at index {}:".format(args.host, src, args.dst, idcs[i]))
         copy_files_remote(args.host.split('@')[1], args.host.split('@')[0], src, images_dst_path, poses_file_dst)
     else: # case: copy files from local machine
-        print("import sequence from '{}' to '{}' at index {}:".format(src, args.dst, idcs[i]))
+        print("import sequence '{}' to '{}' at index {}:".format(src, args.dst, idcs[i]))
         copy_files_local(src, images_dst_path, poses_file_dst)
