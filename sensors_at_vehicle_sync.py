@@ -10,7 +10,6 @@ import glob
 import os
 import sys
 import argparse
-import pygame
 import random
 import math
 import numpy as np
@@ -89,6 +88,7 @@ class CarlaSyncMode(object):
                 return data
 
 def should_quit():
+    import pygame
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             return True
@@ -131,10 +131,12 @@ def display_sensors(surface, width, height, data):
         semseg[0].convert(carla.ColorConverter.CityScapesPalette)
         arr[height:, width:, :] = raw_to_np_array(semseg[0])
     # render to display
+    import pygame
     image_surface = pygame.surfarray.make_surface(arr.swapaxes(0, 1))
     surface.blit(image_surface, (0, 0))
 
 def get_font():
+    import pygame
     fonts = [x for x in pygame.font.get_fonts()]
     default_font = 'ubuntumono'
     font = default_font if default_font in fonts else fonts[0]
@@ -338,6 +340,7 @@ def main():
     argparser.add_argument('--base_path', '-base_path', type=str, default="raw/", help="set base directory where recorded sequences will be stored")
     argparser.add_argument('--traffic_light_timings', '-traffic_light_timings', type=float, default=[1.0, 0.5, 2.0], nargs=3, help="set duration in seconds for how long traffic lights are on (format: R Y G)")
     argparser.add_argument('--world', '-world', type=str, default=None, help="set world to load on server")
+    argparser.add_argument('--visualize', '-vis', action='store_true', help="render sensor measurements, PyGame is required")
     # finally parse arguments
     args = argparser.parse_args()
 
@@ -345,15 +348,13 @@ def main():
     global base_path
     base_path = args.base_path
 
-    ## init pygame
-    actor_list = []
-    pygame.init()
-
-    display = pygame.display.set_mode(
-        (args.sensor_width * 2, args.sensor_height * 2),
-        pygame.HWSURFACE | pygame.DOUBLEBUF)
-    font = get_font()
-    clock = pygame.time.Clock()
+    # init pygame if requested
+    if args.visualize:
+        import pygame
+        pygame.init()
+        display = pygame.display.set_mode((args.sensor_width * 2, args.sensor_height * 2), pygame.HWSURFACE | pygame.DOUBLEBUF)
+        font = get_font()
+        clock = pygame.time.Clock()
 
     client = carla.Client('134.2.178.201', 2000)
     client.set_timeout(10.0)
@@ -362,8 +363,6 @@ def main():
         world = client.load_world(args.world)
     else: # else take world thats already running on server
         world = client.get_world()
-
-    settings_w = world.get_settings()
 
     try:
         # set random spawning location of sensor carrying vehicle
@@ -393,10 +392,9 @@ def main():
         # spawn vehicle to which sensors should be attached
         car_blueprints = [x for x in world.get_blueprint_library().filter('vehicle.*') if int(x.get_attribute('number_of_wheels')) == 4]
         vehicle = world.spawn_actor(random.choice(car_blueprints), start_pose)
-
-        actor_list.append(vehicle)
         vehicle.set_simulate_physics(True)
         vehicle.set_autopilot(True)
+        actor_list = [vehicle]
 
         ## spawn sensors
         sensor_list = []
@@ -412,8 +410,7 @@ def main():
         # create sensors given from arguments
         for sensor in args.sensors:
             sensor_actor, sensor_id = spawn_camera_sensor(
-                sensor, world, args.sensor_width, args.sensor_height, args.fov, vehicle, cam_rel_transform_l, args.baseline, base_path
-            )
+                sensor, world, args.sensor_width, args.sensor_height, args.fov, vehicle, cam_rel_transform_l, args.baseline, base_path)
             actor_list.append(sensor_actor)
             sensor_list.append((sensor_actor, sensor_id))
 
@@ -429,10 +426,13 @@ def main():
             # start disk writer thread
             disk_writer_thread.start()
             number_data_buffered  = 0
+
+            # if visualization is requested one can also leave the loop by ESC or exit the window
             while True:
-                if should_quit():
-                    return
-                clock.tick()
+                if args.visualize:
+                    if should_quit():
+                        return
+                    clock.tick()
 
                 ## advance the simulation and wait for the data
                 data = sync_mode.tick(timeout=2.0)
@@ -450,17 +450,16 @@ def main():
                 snapshot = get_sensor(data, 'carla.WorldSnapshot')[0]
                 fps = round(1.0 / snapshot.timestamp.delta_seconds)
 
-                ## visualize sensor measurements
-                display_sensors(display, args.sensor_width, args.sensor_height, data)
-
-                # draw left rgb and semantic segmentation overlayed (to verify if left frames are synchronized)
-                # draw_image(display, im_rgb_l)
-                # draw_image(display, im_semseg, blend=True)
-
-                # draw simulation timings
-                display.blit(font.render('% 5d FPS (real)' % clock.get_fps(), True, (255, 255, 255)), (8, 10))
-                display.blit(font.render('% 5d FPS (simulated sensor capturing rate)' % fps, True, (255, 255, 255)), (8, 28))
-                pygame.display.flip()
+                ## visualize sensor measurements if requested
+                if args.visualize:
+                    display_sensors(display, args.sensor_width, args.sensor_height, data)
+                    # draw left rgb and semantic segmentation overlayed (to verify if left frames are synchronized)
+                    # draw_image(display, im_rgb_l)
+                    # draw_image(display, im_semseg, blend=True)
+                    # draw simulation timings
+                    display.blit(font.render('% 5d FPS (real)' % clock.get_fps(), True, (255, 255, 255)), (8, 10))
+                    display.blit(font.render('% 5d FPS (simulated sensor capturing rate)' % fps, True, (255, 255, 255)), (8, 28))
+                    pygame.display.flip()
 
                 # print progress
                 print('#buffered/#written measurements: {}/{}'.format(number_data_buffered, sequence_id), end='\r')
@@ -473,20 +472,16 @@ def main():
         disk_writer_thread.join()
         print(". done")
         # destroy sequence buffer
-        del sequence_buffer # TODO ensure that all measurements are written to disk before deletion
+        del sequence_buffer
         # destroy actors and sensors
         print('destroying actors and sensors.')
         for actor in actor_list:
             actor.destroy()
-
-        pygame.quit()
-
+        if args.visualize:
+            pygame.quit()
 
 if __name__ == '__main__':
-
     try:
-
         main()
-
     except KeyboardInterrupt:
         print('\nCancelled by user. Bye!')
