@@ -382,7 +382,8 @@ def main():
             traffic_light.set_yellow_time(d_yellow)
             traffic_light.set_green_time(d_green)
 
-        # TODO set weather state of world
+        # set world to sunny midday
+        world.set_weather(carla.WeatherParameters.ClearNoon)
 
         # TODO spawn vehicles and pedestrians
 
