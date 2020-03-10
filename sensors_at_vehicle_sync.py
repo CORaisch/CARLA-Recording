@@ -340,6 +340,7 @@ def main():
     argparser.add_argument('--base_path', '-base_path', type=str, default="raw/", help="set base directory where recorded sequences will be stored")
     argparser.add_argument('--traffic_light_timings', '-traffic_light_timings', type=float, default=[1.0, 0.5, 2.0], nargs=3, help="set duration in seconds for how long traffic lights are on (format: R Y G)")
     argparser.add_argument('--world', '-world', type=str, default=None, help="set world to load on server")
+    argparser.add_argument('--weather_preset', '-weather', type=str, default='Default', help="set weather preset, for a list of available presets see https://github.com/carla-simulator/carla/blob/master/LibCarla/source/carla/rpc/WeatherParameters.h")
     argparser.add_argument('--visualize', '-vis', action='store_true', help="render sensor measurements, PyGame is required")
     # finally parse arguments
     args = argparser.parse_args()
@@ -370,7 +371,7 @@ def main():
         start_pose = random.choice(m.get_spawn_points())
 
         # # beg DEBUG
-        # # force vehicle to spawn near slope -> used for checking if all rotations work correctly
+        # # force vehicle to spawn near slope of Town03 -> used for checking if all rotations work correctly
         # start_pose = carla.Transform(carla.Location(150.51410675048828, -78.61235046386719, 8.932514190673828), carla.Rotation(0.0, 90.0, 0.0))
         # # end DEBUG
 
@@ -382,8 +383,8 @@ def main():
             traffic_light.set_yellow_time(d_yellow)
             traffic_light.set_green_time(d_green)
 
-        # set world to sunny midday
-        world.set_weather(carla.WeatherParameters.ClearNoon)
+        # set weather state of world according to given preset: https://github.com/carla-simulator/carla/blob/master/LibCarla/source/carla/rpc/WeatherParameters.h
+        world.set_weather(eval('carla.WeatherParameters.'+args.weather_preset))
 
         # TODO spawn vehicles and pedestrians
 
