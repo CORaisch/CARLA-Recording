@@ -27,55 +27,77 @@ import argparse
 import logging
 import random
 
-def spawn_vehicles_and_walkers(host='127.0.0.1', port=2000, number_of_vehicles=10, number_of_walkers=50, safe=False,
-         filterw='walker.pedestrian.*', filterv='vehicle.*', tm_port=8000, sync=False):
+
+def main():
+    argparser = argparse.ArgumentParser(
+        description=__doc__)
+    argparser.add_argument(
+        '--host',
+        metavar='H',
+        default='127.0.0.1',
+        help='IP of the host server (default: 127.0.0.1)')
+    argparser.add_argument(
+        '-p', '--port',
+        metavar='P',
+        default=2000,
+        type=int,
+        help='TCP port to listen to (default: 2000)')
+    argparser.add_argument(
+        '-n', '--number-of-vehicles',
+        metavar='N',
+        default=10,
+        type=int,
+        help='number of vehicles (default: 10)')
+    argparser.add_argument(
+        '-w', '--number-of-walkers',
+        metavar='W',
+        default=50,
+        type=int,
+        help='number of walkers (default: 50)')
+    argparser.add_argument(
+        '--safe',
+        action='store_true',
+        help='avoid spawning vehicles prone to accidents')
+    argparser.add_argument(
+        '--filterv',
+        metavar='PATTERN',
+        default='vehicle.*',
+        help='vehicles filter (default: "vehicle.*")')
+    argparser.add_argument(
+        '--filterw',
+        metavar='PATTERN',
+        default='walker.pedestrian.*',
+        help='pedestrians filter (default: "walker.pedestrian.*")')
+    args = argparser.parse_args()
 
     logging.basicConfig(format='%(levelname)s: %(message)s', level=logging.INFO)
 
     vehicles_list = []
     walkers_list = []
     all_id = []
-    client = carla.Client(host, port)
-    client.set_timeout(10.0)
+    client = carla.Client(args.host, args.port)
+    client.set_timeout(2.0)
 
     try:
 
-        traffic_manager = client.get_trafficmanager(tm_port)
-        traffic_manager.set_global_distance_to_leading_vehicle(2.0)
         world = client.get_world()
+        blueprints = world.get_blueprint_library().filter(args.filterv)
+        blueprintsWalkers = world.get_blueprint_library().filter(args.filterw)
 
-        synchronous_master = False
-
-        if sync:
-            settings = world.get_settings()
-            traffic_manager.set_synchronous_mode(True)
-            if not settings.synchronous_mode:
-                synchronous_master = True
-                settings.synchronous_mode = True
-                settings.fixed_delta_seconds = 0.05
-                world.apply_settings(settings)
-            else:
-                synchronous_master = False
-
-        blueprints = world.get_blueprint_library().filter(filterv)
-        blueprintsWalkers = world.get_blueprint_library().filter(filterw)
-
-        if safe:
+        if args.safe:
             blueprints = [x for x in blueprints if int(x.get_attribute('number_of_wheels')) == 4]
             blueprints = [x for x in blueprints if not x.id.endswith('isetta')]
             blueprints = [x for x in blueprints if not x.id.endswith('carlacola')]
-            blueprints = [x for x in blueprints if not x.id.endswith('cybertruck')]
-            blueprints = [x for x in blueprints if not x.id.endswith('t2')]
 
         spawn_points = world.get_map().get_spawn_points()
         number_of_spawn_points = len(spawn_points)
 
-        if number_of_vehicles < number_of_spawn_points:
+        if args.number_of_vehicles < number_of_spawn_points:
             random.shuffle(spawn_points)
-        elif number_of_vehicles > number_of_spawn_points:
+        elif args.number_of_vehicles > number_of_spawn_points:
             msg = 'requested %d vehicles, but could only find %d spawn points'
-            logging.warning(msg, number_of_vehicles, number_of_spawn_points)
-            number_of_vehicles = number_of_spawn_points
+            logging.warning(msg, args.number_of_vehicles, number_of_spawn_points)
+            args.number_of_vehicles = number_of_spawn_points
 
         # @todo cannot import these directly.
         SpawnActor = carla.command.SpawnActor
@@ -87,7 +109,7 @@ def spawn_vehicles_and_walkers(host='127.0.0.1', port=2000, number_of_vehicles=1
         # --------------
         batch = []
         for n, transform in enumerate(spawn_points):
-            if n >= number_of_vehicles:
+            if n >= args.number_of_vehicles:
                 break
             blueprint = random.choice(blueprints)
             if blueprint.has_attribute('color'):
@@ -99,7 +121,7 @@ def spawn_vehicles_and_walkers(host='127.0.0.1', port=2000, number_of_vehicles=1
             blueprint.set_attribute('role_name', 'autopilot')
             batch.append(SpawnActor(blueprint, transform).then(SetAutopilot(FutureActor, True)))
 
-        for response in client.apply_batch_sync(batch, synchronous_master):
+        for response in client.apply_batch_sync(batch):
             if response.error:
                 logging.error(response.error)
             else:
@@ -113,7 +135,7 @@ def spawn_vehicles_and_walkers(host='127.0.0.1', port=2000, number_of_vehicles=1
         percentagePedestriansCrossing = 0.0     # how many pedestrians will walk through the road
         # 1. take all the random locations to spawn
         spawn_points = []
-        for i in range(number_of_walkers):
+        for i in range(args.number_of_walkers):
             spawn_point = carla.Transform()
             loc = world.get_random_location_from_navigation()
             if (loc != None):
@@ -124,7 +146,7 @@ def spawn_vehicles_and_walkers(host='127.0.0.1', port=2000, number_of_vehicles=1
         walker_speed = []
         for spawn_point in spawn_points:
             walker_bp = random.choice(blueprintsWalkers)
-            # set as not invincible
+            # set as not invencible
             if walker_bp.has_attribute('is_invincible'):
                 walker_bp.set_attribute('is_invincible', 'false')
             # set the max speed
@@ -166,10 +188,7 @@ def spawn_vehicles_and_walkers(host='127.0.0.1', port=2000, number_of_vehicles=1
         all_actors = world.get_actors(all_id)
 
         # wait for a tick to ensure client receives the last transform of the walkers we have just created
-        if not sync or not synchronous_master:
-            world.wait_for_tick()
-        else:
-            world.tick()
+        world.wait_for_tick()
 
         # 5. initialize each controller and set target to walk to (list is [controler, actor, controller, actor ...])
         # set how many pedestrians can cross the road
@@ -184,22 +203,10 @@ def spawn_vehicles_and_walkers(host='127.0.0.1', port=2000, number_of_vehicles=1
 
         print('spawned %d vehicles and %d walkers, press Ctrl+C to exit.' % (len(vehicles_list), len(walkers_list)))
 
-        # example of how to use parameters
-        traffic_manager.global_percentage_speed_difference(30.0)
-
         while True:
-            if sync and synchronous_master:
-                world.tick()
-            else:
-                world.wait_for_tick()
+            world.wait_for_tick()
 
     finally:
-
-        if sync and synchronous_master:
-            settings = world.get_settings()
-            settings.synchronous_mode = False
-            settings.fixed_delta_seconds = None
-            world.apply_settings(settings)
 
         print('\ndestroying %d vehicles' % len(vehicles_list))
         client.apply_batch([carla.command.DestroyActor(x) for x in vehicles_list])
@@ -216,57 +223,7 @@ def spawn_vehicles_and_walkers(host='127.0.0.1', port=2000, number_of_vehicles=1
 if __name__ == '__main__':
 
     try:
-        argparser = argparse.ArgumentParser(description=__doc__)
-        argparser.add_argument(
-            '--host',
-            metavar='H',
-            default='127.0.0.1',
-            help='IP of the host server (default: 127.0.0.1)')
-        argparser.add_argument(
-            '-p', '--port',
-            metavar='P',
-            default=2000,
-            type=int,
-            help='TCP port to listen to (default: 2000)')
-        argparser.add_argument(
-            '-n', '--number-of-vehicles',
-            metavar='N',
-            default=10,
-            type=int,
-            help='number of vehicles (default: 10)')
-        argparser.add_argument(
-            '-w', '--number-of-walkers',
-            metavar='W',
-            default=50,
-            type=int,
-            help='number of walkers (default: 50)')
-        argparser.add_argument(
-            '--safe',
-            action='store_true',
-            help='avoid spawning vehicles prone to accidents')
-        argparser.add_argument(
-            '--filterv',
-            metavar='PATTERN',
-            default='vehicle.*',
-            help='vehicles filter (default: "vehicle.*")')
-        argparser.add_argument(
-            '--filterw',
-            metavar='PATTERN',
-            default='walker.pedestrian.*',
-            help='pedestrians filter (default: "walker.pedestrian.*")')
-        argparser.add_argument(
-            '-tm_p', '--tm_port',
-            metavar='P',
-            default=8000,
-            type=int,
-            help='port to communicate with TM (default: 8000)')
-        argparser.add_argument(
-            '--sync',
-            action='store_true',
-            help='Synchronous mode execution')
-        args = argparser.parse_args()
-
-        spawn_vehicles_and_walkers(args.host, args.port, args.number_of_vehicles, args.number_of_walkers, args.safe, args.filterv, args.filterw, args.tm_port, args.sync)
+        main()
     except KeyboardInterrupt:
         pass
     finally:
