@@ -18,6 +18,8 @@ import queue
 import threading
 import time
 
+from spawn_npc import spawn_vehicles_and_walkers
+
 ## globals
 is_running = True
 sequence_buffer = queue.Queue()
@@ -340,6 +342,8 @@ def main():
     argparser.add_argument('--base_path', '-base_path', type=str, default="raw/", help="set base directory where recorded sequences will be stored")
     argparser.add_argument('--traffic_light_timings', '-traffic_light_timings', type=float, default=[1.0, 0.5, 2.0], nargs=3, help="set duration in seconds for how long traffic lights are on (format: R Y G)")
     argparser.add_argument('--world', '-world', type=str, default=None, help="set world to load on server")
+    argparser.add_argument('--n_vehicles', '-n', type=int, default=0, help="set how many vehicles should be spawned")
+    argparser.add_argument('--n_walkers', '-w', type=int, default=0, help="set how many walkers should be spawned")
     argparser.add_argument('--weather_preset', '-weather', type=str, default='Default', help="set weather preset, for a list of available presets see https://github.com/carla-simulator/carla/blob/master/LibCarla/source/carla/rpc/WeatherParameters.h")
     argparser.add_argument('--visualize', '-vis', action='store_true', help="render sensor measurements, PyGame is required")
     # finally parse arguments
@@ -386,7 +390,10 @@ def main():
         # set weather state of world according to given preset: https://github.com/carla-simulator/carla/blob/master/LibCarla/source/carla/rpc/WeatherParameters.h
         world.set_weather(eval('carla.WeatherParameters.'+args.weather_preset))
 
-        # TODO spawn vehicles and pedestrians
+        # spawn vehicles and pedestrians NOTE EXPERIMENTAL
+        if args.n_vehicles or args.n_walkers:
+            _, spawned_vehicles, spawned_walkers, all_id, all_actors = spawn_vehicles_and_walkers(client, args.n_vehicles, args.n_walkers)
+        # TODO remove spawned actors at the end
 
         # get list of actor blueprints
         blueprint_library = world.get_blueprint_library()
