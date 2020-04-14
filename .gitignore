@@ -4,3 +4,5 @@ processed/
 ros_workspace/devel
 ros_workspace/build
 ros_workspace/.catkin_workspace
+__pycache__/
+logs/
