@@ -19,6 +19,7 @@ import threading
 import time
 
 from spawn_npc import spawn_vehicles_and_walkers
+# from agents.navigation.roaming_agent import RoamingAgent  # pylint: disable=import-error
 
 ## globals
 is_running = True
@@ -340,11 +341,12 @@ def main():
     argparser.add_argument('--left_rel_location', '-left_rel_location', type=float, default=[], nargs=3, help="set relative loation of left camera")
     argparser.add_argument('--fps', '-fps', type=float, default=10.0, help="set captuing rate of sensors (WARNING don't set value below 10 fps, its not yet supported by CARLA)")
     argparser.add_argument('--base_path', '-base_path', type=str, default="raw/", help="set base directory where recorded sequences will be stored")
-    argparser.add_argument('--traffic_light_timings', '-traffic_light_timings', type=float, default=[1.0, 0.5, 2.0], nargs=3, help="set duration in seconds for how long traffic lights are on (format: R Y G)")
+    argparser.add_argument('--ignore_traffic_lights', '-itl', action='store_true', help="recording vehicle will ignore traffic lights. Use with caution when other vehicles are spawned.")
     argparser.add_argument('--world', '-world', type=str, default=None, help="set world to load on server")
     argparser.add_argument('--n_vehicles', '-n', type=int, default=0, help="set how many vehicles should be spawned")
     argparser.add_argument('--n_walkers', '-w', type=int, default=0, help="set how many walkers should be spawned")
     argparser.add_argument('--weather_preset', '-weather', type=str, default='Default', help="set weather preset, for a list of available presets see https://github.com/carla-simulator/carla/blob/master/LibCarla/source/carla/rpc/WeatherParameters.h")
+    argparser.add_argument('--n_frames', '-f', type=int, default=None, help="set how many frames should be recorded")
     argparser.add_argument('--visualize', '-vis', action='store_true', help="render sensor measurements, PyGame is required")
     # finally parse arguments
     args = argparser.parse_args()
@@ -372,44 +374,42 @@ def main():
     try:
         # set random spawning location of sensor carrying vehicle
         m = world.get_map()
-        start_pose = random.choice(m.get_spawn_points())
 
         # # beg DEBUG
         # # force vehicle to spawn near slope of Town03 -> used for checking if all rotations work correctly
         # start_pose = carla.Transform(carla.Location(150.51410675048828, -78.61235046386719, 8.932514190673828), carla.Rotation(0.0, 90.0, 0.0))
         # # end DEBUG
 
-        ## setup world properties
-        # set traffic light timings FIXME almost no effect -> kick it?
-        d_red, d_yellow, d_green = args.traffic_light_timings
-        for traffic_light in world.get_actors().filter('traffic.traffic_light'):
-            traffic_light.set_red_time(d_red)
-            traffic_light.set_yellow_time(d_yellow)
-            traffic_light.set_green_time(d_green)
-
         # set weather state of world according to given preset: https://github.com/carla-simulator/carla/blob/master/LibCarla/source/carla/rpc/WeatherParameters.h
         world.set_weather(eval('carla.WeatherParameters.'+args.weather_preset))
 
-        # spawn vehicles and pedestrians NOTE EXPERIMENTAL
+        # spawn vehicles and pedestrians
         if args.n_vehicles or args.n_walkers:
-            _, spawned_vehicles, spawned_walkers, all_id, all_actors = spawn_vehicles_and_walkers(client, args.n_vehicles, args.n_walkers)
-        # TODO remove spawned actors at the end
+            nv, nw = spawn_vehicles_and_walkers(client, args.n_vehicles, args.n_walkers)
+            print('spawned {} vehicles and {} walkers'.format(nv, nw))
 
         # get list of actor blueprints
         blueprint_library = world.get_blueprint_library()
 
-        # spawn vehicle to which sensors should be attached
-        car_blueprints = [x for x in world.get_blueprint_library().filter('vehicle.*') if int(x.get_attribute('number_of_wheels')) == 4]
-        vehicle = world.spawn_actor(random.choice(car_blueprints), start_pose)
+        # spawn recording vehicle
+        car_blueprint = random.choice([x for x in world.get_blueprint_library().filter('vehicle.*') if int(x.get_attribute('number_of_wheels')) == 4])
+        vehicle = None
+        while not vehicle:
+            start_pose = random.choice(m.get_spawn_points())
+            vehicle = world.try_spawn_actor(car_blueprint, start_pose)
         vehicle.set_simulate_physics(True)
         vehicle.set_autopilot(True)
-        actor_list = [vehicle]
+
+        # make recording vehicle ignore traffic lights if requested
+        if args.ignore_traffic_lights:
+            tm = client.get_trafficmanager()
+            tm.ignore_lights_percentage(vehicle, 100)
 
         ## spawn sensors
-        sensor_list = []
         # define left camera poses relative to vehicle
         if not args.left_rel_location:
             vehicle_bb = vehicle.bounding_box
+            # FIXME recheck relative transform -> cam seems to be too high
             cam_rel_transform_l = carla.Transform(carla.Location(x=vehicle_bb.extent.x, y=vehicle_bb.extent.y-args.baseline/2.0, z=vehicle_bb.extent.z*2.0+0.5))
             args.left_rel_location = [vehicle_bb.extent.x, vehicle_bb.extent.y-args.baseline/2.0, vehicle_bb.extent.z*2.0+0.5]
         else:
@@ -417,11 +417,14 @@ def main():
             cam_rel_transform_l = carla.Transform(carla.Location(x=pos_x, y=pos_y-args.baseline/2.0, z=pos_z))
 
         # create sensors given from arguments
+        sensor_list = []
         for sensor in args.sensors:
             sensor_actor, sensor_id = spawn_camera_sensor(
                 sensor, world, args.sensor_width, args.sensor_height, args.fov, vehicle, cam_rel_transform_l, args.baseline, base_path)
-            actor_list.append(sensor_actor)
             sensor_list.append((sensor_actor, sensor_id))
+
+        # set vehicle agent
+        # TODO
 
         ## save simulation configuration to disk
         write_config_to_disk(args)
@@ -473,6 +476,10 @@ def main():
                 # print progress
                 print('#buffered/#written measurements: {}/{}'.format(number_data_buffered, sequence_id), end='\r')
 
+                # quit recording after n_frames; if n_frames is not specified record endless
+                if args.n_frames and number_data_buffered == args.n_frames:
+                    break
+
     finally:
         # stop and wait for disk writer thread
         print("\nwait till remaining sensor measurements are written to disk", end='', flush=True)
@@ -480,17 +487,19 @@ def main():
         is_running = False
         disk_writer_thread.join()
         print(". done")
-        # destroy sequence buffer
-        del sequence_buffer
-        # destroy actors and sensors
-        print('destroying actors and sensors.')
-        for actor in actor_list:
-            actor.destroy()
+        # destroy actors and sensors # NOTE disabled since it causes invalid session errors at the server
+        # killed_sensors  = len(client.apply_batch_sync([carla.command.DestroyActor(x) for x in world.get_actors().filter('sensor.*')]))
+        # killed_vehicles = len(client.apply_batch_sync([carla.command.DestroyActor(x) for x in world.get_actors().filter('vehicle.*')]))
+        # killed_walkers  = len(client.apply_batch_sync([carla.command.DestroyActor(x) for x in world.get_actors().filter('walker.pedestrian.*')]))
+        # print('destroyed {} vehicles, {} walkers and {} sensors'.format(killed_vehicles, killed_walkers, killed_sensors))
         if args.visualize:
             pygame.quit()
+        # free mem
+        del sensor_list
+        del sequence_buffer
 
 if __name__ == '__main__':
     try:
         main()
     except KeyboardInterrupt:
-        print('\nCancelled by user. Bye!')
+        print('Cancelled by user. Bye!')
