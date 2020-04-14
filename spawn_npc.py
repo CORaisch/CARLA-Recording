@@ -27,6 +27,9 @@ import argparse
 import logging
 import random
 
+# setup logger
+logging.basicConfig(filename='logs/spawn_npc-'+str(time.time())+'.log')
+
 def spawn_vehicles_and_walkers(client, number_of_vehicles, number_of_walkers, filterv='vehicle.*', filterw='walker.pedestrian.*', safe=True):
 
     vehicles_list = []
@@ -154,7 +157,7 @@ def spawn_vehicles_and_walkers(client, number_of_vehicles, number_of_walkers, fi
         # max speed
         all_actors[i].set_max_speed(float(walker_speed[int(i/2)]))
 
-    return world, vehicles_list, walkers_list, all_id, all_actors
+    return len(vehicles_list), len(walkers_list)
 
 def main():
     argparser = argparse.ArgumentParser(
