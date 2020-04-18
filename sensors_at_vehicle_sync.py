@@ -19,7 +19,7 @@ import threading
 import time
 
 from spawn_npc import spawn_vehicles_and_walkers
-# from agents.navigation.roaming_agent import RoamingAgent  # pylint: disable=import-error
+from agents.navigation.roaming_recording_agent import RoamingRecordingAgent, read_waypoint_history  # pylint: disable=import-error
 
 ## globals
 is_running = True
@@ -348,6 +348,8 @@ def main():
     argparser.add_argument('--weather_preset', '-weather', type=str, default='Default', help="set weather preset, for a list of available presets see https://github.com/carla-simulator/carla/blob/master/LibCarla/source/carla/rpc/WeatherParameters.h")
     argparser.add_argument('--n_frames', '-f', type=int, default=None, help="set how many frames should be recorded")
     argparser.add_argument('--visualize', '-vis', action='store_true', help="render sensor measurements, PyGame is required")
+    argparser.add_argument('--record_waypoints', '-rec', action='store_true', help="set if random waypoints should be saved at BASE_PATH/waypoints.json")
+    argparser.add_argument('--replay_file', '-rep', type=str, default=None, help="filename of trajectory JSON file to replay. If not set random trajectory will be generated on-the-fly")
     # finally parse arguments
     args = argparser.parse_args()
 
@@ -383,27 +385,32 @@ def main():
         # set weather state of world according to given preset: https://github.com/carla-simulator/carla/blob/master/LibCarla/source/carla/rpc/WeatherParameters.h
         world.set_weather(eval('carla.WeatherParameters.'+args.weather_preset))
 
+        # spawn recording vehicle
+        vehicle = None; global_plan = None;
+        car_blueprint = random.choice([x for x in world.get_blueprint_library().filter('vehicle.*') if int(x.get_attribute('number_of_wheels')) == 4])
+        if args.replay_file: # spawn vehicle at initial transform of replay file
+            init_tf, global_plan = read_waypoint_history(m, args.world, args.replay_file)
+            start_pose = init_tf
+            vehicle = world.spawn_actor(car_blueprint, start_pose)
+        else: # spawn vehicle randomly
+            while not vehicle:
+                start_pose = random.choice(m.get_spawn_points())
+                vehicle = world.try_spawn_actor(car_blueprint, start_pose)
+
+        # setup recording agent (autopilot)
+        if args.record_waypoints or args.replay_file:
+            rec_file = os.path.join(args.base_path, 'waypoints.json') if args.record_waypoints else None
+            agent = RoamingRecordingAgent(vehicle, start_pose, args.world, args.ignore_traffic_lights, rec_file, global_plan)
+        else: # when no waypoints are recorded or replayed use traffic manager to control the vehicle (its more optimized)
+            tm = client.get_trafficmanager()
+            vehicle.set_autopilot(True)
+            if args.ignore_traffic_lights:
+                tm.ignore_lights_percentage(vehicle, 100)
+
         # spawn vehicles and pedestrians
         if args.n_vehicles or args.n_walkers:
             nv, nw = spawn_vehicles_and_walkers(client, args.n_vehicles, args.n_walkers)
             print('spawned {} vehicles and {} walkers'.format(nv, nw))
-
-        # get list of actor blueprints
-        blueprint_library = world.get_blueprint_library()
-
-        # spawn recording vehicle
-        car_blueprint = random.choice([x for x in world.get_blueprint_library().filter('vehicle.*') if int(x.get_attribute('number_of_wheels')) == 4])
-        vehicle = None
-        while not vehicle:
-            start_pose = random.choice(m.get_spawn_points())
-            vehicle = world.try_spawn_actor(car_blueprint, start_pose)
-        vehicle.set_simulate_physics(True)
-        vehicle.set_autopilot(True)
-
-        # make recording vehicle ignore traffic lights if requested
-        if args.ignore_traffic_lights:
-            tm = client.get_trafficmanager()
-            tm.ignore_lights_percentage(vehicle, 100)
 
         ## spawn sensors
         # define left camera poses relative to vehicle
@@ -422,9 +429,6 @@ def main():
             sensor_actor, sensor_id = spawn_camera_sensor(
                 sensor, world, args.sensor_width, args.sensor_height, args.fov, vehicle, cam_rel_transform_l, args.baseline, base_path)
             sensor_list.append((sensor_actor, sensor_id))
-
-        # set vehicle agent
-        # TODO
 
         ## save simulation configuration to disk
         write_config_to_disk(args)
@@ -454,8 +458,17 @@ def main():
                 sequence_buffer.put(data[1:]) # don't push snapshot
                 number_data_buffered += 1
 
+                # use own agent when recording or replaying waypoints
+                if args.record_waypoints or args.replay_file:
+                    # move recording vehicle
+                    control = agent.run_step()
+                    vehicle.apply_control(control)
+                    # stop when everything is replayed
+                    if agent.done():
+                        break
+
                 ## beg DEBUG
-                time.sleep(0.5) # wait short ammount of time to give thread time NOTE comment this out when not on server
+                time.sleep(0.4) # wait short ammount of time to give thread time NOTE comment this out when not on server
                 ## end DEBUG
 
                 ## compute simulated fps (for verification)
@@ -480,6 +493,8 @@ def main():
                 if args.n_frames and number_data_buffered == args.n_frames:
                     break
 
+    # except Exception as ex:
+    #     print('Exception caught in main loop:', str(ex), '\nraw:', ex, '\nargs:', ex.args)
     finally:
         # stop and wait for disk writer thread
         print("\nwait till remaining sensor measurements are written to disk", end='', flush=True)
@@ -487,6 +502,10 @@ def main():
         is_running = False
         disk_writer_thread.join()
         print(". done")
+        # save waypoint history
+        if agent._record_file:
+            print("save waypoint history to {}".format(agent._record_file))
+            agent.save_waypoint_history()
         # destroy actors and sensors # NOTE disabled since it causes invalid session errors at the server
         # killed_sensors  = len(client.apply_batch_sync([carla.command.DestroyActor(x) for x in world.get_actors().filter('sensor.*')]))
         # killed_vehicles = len(client.apply_batch_sync([carla.command.DestroyActor(x) for x in world.get_actors().filter('vehicle.*')]))
@@ -495,6 +514,8 @@ def main():
         if args.visualize:
             pygame.quit()
         # free mem
+        if args.record_waypoints or args.replay_file:
+            del agent
         del sensor_list
         del sequence_buffer
 
