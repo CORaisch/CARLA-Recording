@@ -43,7 +43,7 @@ class RoamingRecordingAgent(Agent):
     'ignore_traffic_lights' is set.
     """
 
-    def __init__(self, vehicle, initial_tf, world_name, ignore_traffic_lights=False, record_file=None, global_plan=None):
+    def __init__(self, vehicle, initial_tf, world_name, ignore_traffic_lights=False, record_file=None, global_plan=None, fps=10.0):
         """
 
         :param vehicle: actor to apply to local planner logic onto
@@ -55,7 +55,7 @@ class RoamingRecordingAgent(Agent):
         self._record_file = record_file
         self._initial_transform = initial_tf
         self._world_name = world_name
-        self._local_planner = LocalPlanner(self._vehicle, recording=bool(self._record_file))
+        self._local_planner = LocalPlanner(self._vehicle, recording=bool(self._record_file), fps=fps)
         if global_plan:
             self._local_planner.set_global_plan(global_plan)
 

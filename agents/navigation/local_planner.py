@@ -41,11 +41,9 @@ class LocalPlanner(object):
 
     # minimum distance to target waypoint as a percentage (e.g. within 90% of
     # total distance)
-    # MIN_DISTANCE_PERCENTAGE = 0.9
-    # MIN_DISTANCE_PERCENTAGE = 0.7 # NOTE best val so far
-    MIN_DISTANCE_PERCENTAGE = 0.5
+    MIN_DISTANCE_PERCENTAGE = 0.9
 
-    def __init__(self, vehicle, opt_dict=None, recording=False):
+    def __init__(self, vehicle, opt_dict=None, recording=False, fps=10.0):
         """
         :param vehicle: actor to apply to local planner logic onto
         :param opt_dict: dictionary of arguments with the following semantics:
@@ -65,7 +63,8 @@ class LocalPlanner(object):
         self._vehicle = vehicle
         self._map = self._vehicle.get_world().get_map()
 
-        self._dt = None
+        self._fps = fps
+        self._dt = 1.0 / self._fps
         self._target_speed = None
         self._sampling_radius = None
         self._min_distance = None
@@ -79,18 +78,16 @@ class LocalPlanner(object):
         self._waypoints_queue = deque(maxlen=20000)
         self._buffer_size = 5
         self._waypoint_buffer = deque(maxlen=self._buffer_size)
-
-        # initializing controller
-        self._init_controller(opt_dict)
-
         # setup recording
         self.recording = recording
         self._waypoint_history = []
+        # initializing controller
+        self._init_controller(opt_dict)
 
     def __del__(self):
         if self._vehicle:
             self._vehicle.destroy()
-        print("Destroying ego-vehicle!")
+            print("Destroying ego-vehicle!")
 
     def reset_vehicle(self):
         self._vehicle = None
@@ -104,21 +101,21 @@ class LocalPlanner(object):
         :return:
         """
         # default params
-        self._dt = 1.0 / 10.0 # 1.0 / 20.0
         self._target_speed = 20.0  # Km/h
         self._sampling_radius = self._target_speed * 1 / 3.6  # 1 seconds horizon
         self._min_distance = self._sampling_radius * self.MIN_DISTANCE_PERCENTAGE
+        self._max_brake = 0.3
+        self._max_throt = 0.75
+        self._max_steer = 0.8
         args_lateral_dict = {
-            # 'K_P': 1.95,
-            # 'K_P': 1.75, # NOTE good value so far
-            'K_P': 1.65,
-            'K_D': 0.01,
-            'K_I': 1.4,
+            'K_P': 1.95,
+            'K_D': 0.2,
+            'K_I': 0.07,
             'dt': self._dt}
         args_longitudinal_dict = {
             'K_P': 1.0,
             'K_D': 0,
-            'K_I': 1,
+            'K_I': 0.05,
             'dt': self._dt}
 
         # parameters overload
@@ -134,12 +131,20 @@ class LocalPlanner(object):
                 args_lateral_dict = opt_dict['lateral_control_dict']
             if 'longitudinal_control_dict' in opt_dict:
                 args_longitudinal_dict = opt_dict['longitudinal_control_dict']
+            if 'max_throttle' in opt_dict:
+                self._max_throt = opt_dict['max_throttle']
+            if 'max_brake' in opt_dict:
+                self._max_brake = opt_dict['max_brake']
+            if 'max_steering' in opt_dict:
+                self._max_steer = opt_dict['max_steering']
 
         self._current_waypoint = self._map.get_waypoint(self._vehicle.get_location())
         self._vehicle_controller = VehiclePIDController(self._vehicle,
                                                         args_lateral=args_lateral_dict,
-                                                        args_longitudinal=args_longitudinal_dict)
-
+                                                        args_longitudinal=args_longitudinal_dict,
+                                                        max_throttle=self._max_throt,
+                                                        max_brake=self._max_brake,
+                                                        max_steering=self._max_steer)
         self._global_plan = False
 
         # compute initial waypoints
@@ -173,6 +178,8 @@ class LocalPlanner(object):
             last_waypoint = self._waypoints_queue[-1][0]
             next_waypoints = list(last_waypoint.next(self._sampling_radius))
 
+            if len(next_waypoints) == 0:
+                break
             if len(next_waypoints) == 1:
                 # only one option available ==> lanefollowing
                 next_waypoint = next_waypoints[0]
@@ -207,14 +214,13 @@ class LocalPlanner(object):
         if not self._global_plan and len(self._waypoints_queue) < int(self._waypoints_queue.maxlen * 0.5):
             self._compute_next_waypoints(k=100)
 
-        if len(self._waypoints_queue) == 0:
+        if len(self._waypoints_queue) == 0 and len(self._waypoint_buffer) == 0:
             control = carla.VehicleControl()
             control.steer = 0.0
             control.throttle = 0.0
             control.brake = 1.0
             control.hand_brake = False
             control.manual_gear_shift = False
-
             return control
 
         #   Buffering the waypoints
@@ -256,8 +262,7 @@ class LocalPlanner(object):
         return self._waypoint_history
 
     def done(self):
-        vehicle_transform = self._vehicle.get_transform()
-        return len(self._waypoints_queue) == 0 and all([distance_vehicle(wp, vehicle_transform) < self._min_distance for wp in self._waypoints_queue])
+        return len(self._waypoints_queue) == 0 and len(self._waypoint_buffer) == 0
 
 def _retrieve_options(list_waypoints, current_waypoint):
     """
@@ -281,11 +286,10 @@ def _retrieve_options(list_waypoints, current_waypoint):
     return options
 
 
-def _compute_connection(current_waypoint, next_waypoint):
+def _compute_connection(current_waypoint, next_waypoint, threshold=35):
     """
     Compute the type of topological connection between an active waypoint (current_waypoint) and a target waypoint
     (next_waypoint).
-
     :param current_waypoint: active waypoint
     :param next_waypoint: target waypoint
     :return: the type of topological connection encoded as a RoadOption enum:
@@ -300,7 +304,7 @@ def _compute_connection(current_waypoint, next_waypoint):
     c = c % 360.0
 
     diff_angle = (n - c) % 180.0
-    if diff_angle < 1.0:
+    if diff_angle < threshold or diff_angle > (180 - threshold):
         return RoadOption.STRAIGHT
     elif diff_angle > 90.0:
         return RoadOption.LEFT

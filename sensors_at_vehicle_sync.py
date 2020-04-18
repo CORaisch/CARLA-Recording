@@ -400,7 +400,7 @@ def main():
         # setup recording agent (autopilot)
         if args.record_waypoints or args.replay_file:
             rec_file = os.path.join(args.base_path, 'waypoints.json') if args.record_waypoints else None
-            agent = RoamingRecordingAgent(vehicle, start_pose, args.world, args.ignore_traffic_lights, rec_file, global_plan)
+            agent = RoamingRecordingAgent(vehicle, start_pose, args.world, args.ignore_traffic_lights, rec_file, global_plan, args.fps)
         else: # when no waypoints are recorded or replayed use traffic manager to control the vehicle (its more optimized)
             tm = client.get_trafficmanager()
             vehicle.set_autopilot(True)
