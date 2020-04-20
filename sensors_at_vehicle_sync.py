@@ -343,7 +343,7 @@ def main():
     argparser.add_argument('--base_path', '-base_path', type=str, default="raw/", help="set base directory where recorded sequences will be stored")
     argparser.add_argument('--ignore_traffic_lights', '-itl', action='store_true', help="recording vehicle will ignore traffic lights. Use with caution when other vehicles are spawned.")
     argparser.add_argument('--world', '-world', type=str, default=None, help="set world to load on server")
-    argparser.add_argument('--n_vehicles', '-n', type=int, default=0, help="set how many vehicles should be spawned")
+    argparser.add_argument('--n_vehicles', '-v', type=int, default=0, help="set how many vehicles should be spawned")
     argparser.add_argument('--n_walkers', '-w', type=int, default=0, help="set how many walkers should be spawned")
     argparser.add_argument('--weather_preset', '-weather', type=str, default='Default', help="set weather preset, for a list of available presets see https://github.com/carla-simulator/carla/blob/master/LibCarla/source/carla/rpc/WeatherParameters.h")
     argparser.add_argument('--n_frames', '-f', type=int, default=None, help="set how many frames should be recorded")
@@ -387,7 +387,7 @@ def main():
 
         # spawn recording vehicle
         vehicle = None; global_plan = None;
-        car_blueprint = random.choice([x for x in world.get_blueprint_library().filter('vehicle.*') if int(x.get_attribute('number_of_wheels')) == 4])
+        car_blueprint = world.get_blueprint_library().find('vehicle.tesla.model3')
         if args.replay_file: # spawn vehicle at initial transform of replay file
             init_tf, global_plan = read_waypoint_history(m, args.world, args.replay_file)
             start_pose = init_tf
@@ -413,15 +413,12 @@ def main():
             print('spawned {} vehicles and {} walkers'.format(nv, nw))
 
         ## spawn sensors
-        # define left camera poses relative to vehicle
+        # define left camera poses relative to vehicle bounding box if no transform is given
         if not args.left_rel_location:
-            vehicle_bb = vehicle.bounding_box
-            # FIXME recheck relative transform -> cam seems to be too high
-            cam_rel_transform_l = carla.Transform(carla.Location(x=vehicle_bb.extent.x, y=vehicle_bb.extent.y-args.baseline/2.0, z=vehicle_bb.extent.z*2.0+0.5))
-            args.left_rel_location = [vehicle_bb.extent.x, vehicle_bb.extent.y-args.baseline/2.0, vehicle_bb.extent.z*2.0+0.5]
-        else:
-            pos_x, pos_y, pos_z = args.left_rel_location
-            cam_rel_transform_l = carla.Transform(carla.Location(x=pos_x, y=pos_y-args.baseline/2.0, z=pos_z))
+            bb = vehicle.bounding_box; bbl = bb.location; bbx = bb.extent;
+            args.left_rel_location = [bbl.x, bbl.y, bbl.z+bbx.z]
+        pos_x, pos_y, pos_z = args.left_rel_location
+        cam_rel_transform_l = carla.Transform(carla.Location(x=pos_x, y=pos_y-args.baseline/2.0, z=pos_z))
 
         # create sensors given from arguments
         sensor_list = []
