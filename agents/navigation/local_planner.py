@@ -101,20 +101,21 @@ class LocalPlanner(object):
         :return:
         """
         # default params
-        self._target_speed = 10.0  # Km/h
+        self._target_speed = 20.0  # Km/h
         self._sampling_radius = self._target_speed * 1 / 3.6  # 1 seconds horizon
         self._min_distance = self._sampling_radius * self.MIN_DISTANCE_PERCENTAGE
         self._max_brake = 0.3
         self._max_throt = 0.75
         self._max_steer = 0.8
         args_lateral_dict = {
-            'K_P': 1.95,
+            # 'K_P': 1.95,
+            'K_P': 1.25,
             'K_D': 0.2,
             'K_I': 0.07,
             'dt': self._dt}
         args_longitudinal_dict = {
             'K_P': 1.0,
-            'K_D': 0,
+            'K_D': 0.0,
             'K_I': 0.05,
             'dt': self._dt}
 
