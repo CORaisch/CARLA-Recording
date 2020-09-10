@@ -4,8 +4,9 @@
   <!-- define arguments -->
   <arg name="poses_file" />
   <arg name="timestamps_file" />
+  <arg name="sensors_str" />
 
   <!-- launch nodes -->
-  <node name="pose_to_bag_converter_live" type="pose_to_bag_converter_live.py" pkg="trajectory_visualization" output="screen" args="--poses $(arg poses_file) --timestamps $(arg timestamps_file)" required="true" /> 
+  <node name="pose_to_bag_converter_live" type="pose_to_bag_converter_live.py" pkg="trajectory_visualization" output="screen" args="--poses $(arg poses_file) --timestamps $(arg timestamps_file) --sensors $(arg sensors_str)" required="true" /> 
 
 </launch>
