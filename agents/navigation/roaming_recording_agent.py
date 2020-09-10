@@ -95,7 +95,14 @@ class RoamingRecordingAgent(Agent):
             control = self.emergency_stop()
         else:
             self._state = AgentState.NAVIGATING
-            # standard local planner behavior
+            # update current speed limit
+            target_speed = self._vehicle.get_speed_limit()
+            if self._map.name == 'Town05': # limit speed for certain maps
+                target_speed = min(target_speed, 60.0)
+            if self._map.name == 'Town04' or self._map.name == 'Town06':
+                target_speed = min(target_speed, 50.0)
+            self._local_planner.set_speed(target_speed)
+            # compute movement control vector
             control = self._local_planner.run_step()
 
         return control

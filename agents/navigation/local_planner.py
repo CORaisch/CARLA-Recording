@@ -162,7 +162,8 @@ class LocalPlanner(object):
         :param speed: new target speed in Km/h
         :return:
         """
-        self._target_speed = speed
+        if speed != None:
+            self._target_speed = speed
 
     def _compute_next_waypoints(self, k=1):
         """

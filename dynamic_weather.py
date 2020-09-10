@@ -65,21 +65,21 @@ class Storm(object):
 
     def tick(self, delta_seconds):
         delta = (1.3 if self._increasing else -1.3) * delta_seconds
-        self._t = clamp(delta + self._t, -250.0, 100.0)
-        self.clouds = clamp(self._t + 40.0, 0.0, 90.0)
-        self.rain = clamp(self._t, 0.0, 80.0)
+        self._t = clamp(delta + self._t, -20.0, 100.0)
+        self.clouds = clamp(self._t + 40.0, 20.0, 100.0)
+        self.rain = clamp(self._t, 0.0, 100.0)
         delay = -10.0 if self._increasing else 90.0
-        self.puddles = clamp(self._t + delay, 0.0, 85.0)
-        self.wetness = clamp(self._t * 5, 0.0, 100.0)
+        self.puddles = clamp(self._t + delay, 30.0, 100.0)
+        self.wetness = clamp(self._t * 5, 30.0, 100.0)
+        self.wetness = 0.0
         self.wind = 5.0 if self.clouds <= 20 else 90 if self.clouds >= 70 else 40
         self.fog = clamp(self._t - 10, 0.0, 30.0)
-        if self._t == -250.0:
+        if self._t == -20.0:
             self._increasing = True
         if self._t == 100.0:
             self._increasing = False
 
-    def __str__(self):
-        return 'Storm(clouds=%d%%, rain=%d%%, wind=%d%%)' % (self.clouds, self.rain, self.wind)
+    def __str__(self): return 'Storm(clouds=%d%%, rain=%d%%, wind=%d%%)' % (self.clouds, self.rain, self.wind)
 
 
 class Weather(object):
